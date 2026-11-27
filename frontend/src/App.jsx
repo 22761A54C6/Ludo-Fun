@@ -165,7 +165,10 @@ function App(){
    turnDelay=Math.max(turnDelay,t);
   }
 
-  if(room.turn!==prev.turn&&room.turn===mySeat&&!room.finished)later(()=>{sfx.turn();vibrate(40);say('Your turn!')},turnDelay);
+  // lobby: someone joined, or the host started the game
+  if(!room.started&&room.players.length>prev.players.length){sfx.out();room.players.slice(prev.players.length).forEach(pl=>pl.id!==playerId&&say(`👋 ${pl.name} joined`))}
+  if(room.started&&!prev.started){sfx.six();vibrate(60);later(()=>{if(room.turn===mySeat){sfx.turn();say('🎲 Game on — your turn!')}else say(`🎲 Game on! ${nameOf(room.turn)} goes first`)},300)}
+  else if(room.turn!==prev.turn&&room.turn===mySeat&&!room.finished)later(()=>{sfx.turn();vibrate(40);say('Your turn!')},turnDelay);
  },[room]);
 
  async function request(path,body){setBusy(true);setError('');try{let r=await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let data=await r.json();if(!r.ok)throw Error(data.error||'Request failed');setRoom(data);return data}catch(e){setError(e.message);return null}finally{setBusy(false)}}
@@ -282,9 +285,8 @@ function App(){
 
  const invite=`${location.origin}${location.pathname}?room=${room.code}`;
  const shareText=`🎲 Join my Ludo game! Room code: ${room.code}`;
- // the game has started once anyone has rolled or moved; after that, and when all 4 seats are taken, no invites
- const started=room.dice!==0||room.tokens.some(row=>row.some(v=>v>=0));
- const canInvite=!started&&!room.finished&&room.players.length<4;
+ // invites are only offered in the lobby, while a seat is still free
+ const canInvite=!room.started&&room.players.length<4;
  async function copyLink(){
   try{await navigator.clipboard.writeText(invite)}
   catch{const ta=document.createElement('textarea');ta.value=invite;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}
@@ -296,13 +298,8 @@ function App(){
   copyLink();
  }
  const whatsapp=`https://wa.me/?text=${encodeURIComponent(shareText+" "+invite)}`;
- const turnColor=COLORS[room.turn]||'#2767b2';
- const winnerName=room.players.find(p=>p.id===room.winner)?.name||'Player';
- const myTier=me&&tierOf(room,me.id);
- return <main className="shell">
-  <MedalDefs/>
-  <header><h1>🎲 Online Ludo</h1><div className="code">Room: <b>{room.code}</b><button className="small" aria-label={muted?'Unmute sounds':'Mute sounds'} onClick={()=>{setMuted(!muted);setMutedUI(!muted)}}>{muted?'🔇':'🔊'}</button></div></header>
-  {canInvite&&<section className="invite">
+ const muteBtn=<button className="small" aria-label={muted?'Unmute sounds':'Mute sounds'} onClick={()=>{setMuted(!muted);setMutedUI(!muted)}}>{muted?'🔇':'🔊'}</button>;
+ const inviteCard=canInvite&&<section className="invite">
    <div className="invite-head"><b>Invite friends</b><span>{room.players.length}/4 joined · code <b>{room.code}</b></span></div>
    <div className="invite-btns">
     <button className="share-main" onClick={shareLink}><span aria-hidden="true">📤</span> Share</button>
@@ -310,7 +307,42 @@ function App(){
     <button className="secondary" onClick={copyLink}><span aria-hidden="true">🔗</span> Copy link</button>
    </div>
    <p className="muted">For Instagram, tap <b>Share</b> and pick Instagram, or copy the link and paste it in a chat.</p>
-  </section>}
+  </section>;
+
+ // ---------- waiting room: everyone gathers here until the host taps Start ----------
+ if(!room.started){
+  const host=room.players[0];const isHost=me?.seat===0;const enough=room.players.length>=2;
+  return <main className="shell">
+   <header><h1>🎲 Online Ludo</h1><div className="code">Room: <b>{room.code}</b>{muteBtn}</div></header>
+   <section className="lobby">
+    <h2>Waiting room</h2>
+    <p className="muted">{room.players.length}/4 players have joined</p>
+    <ul className="lobby-seats">
+     {[0,1,2,3].map(s=>{const pl=room.players[s];return <li key={s} className={pl?'filled':'empty'} style={{'--c':COLORS[s]}}>
+      <span className="lobby-dot" aria-hidden="true"/>
+      <span className="lobby-name">{pl?pl.name:'Waiting for player…'}</span>
+      {pl&&s===0&&<span className="lobby-tag host">Host</span>}
+      {pl?.id===playerId&&<span className="lobby-tag you">You</span>}
+     </li>})}
+    </ul>
+    {!me?<p className="error">You are not a member of this room.</p>
+     :isHost?<>
+      <button className="lobby-start" disabled={busy||!enough} onClick={()=>act('start')}>▶ Start game</button>
+      <p className="muted lobby-hint">{enough?'Everyone in? Tap Start game. Nobody can join once the game starts.':'Invite at least one friend to start the game.'}</p>
+     </>
+     :<p className="lobby-wait">Waiting for <b>{host?.name}</b> to start the game<span className="dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></p>}
+    {toast&&<div key={toast.id} className="toast">{toast.msg}</div>}
+   </section>
+   {inviteCard}
+   {error&&<p className="error">{error}</p>}
+  </main>;
+ }
+ const turnColor=COLORS[room.turn]||'#2767b2';
+ const winnerName=room.players.find(p=>p.id===room.winner)?.name||'Player';
+ const myTier=me&&tierOf(room,me.id);
+ return <main className="shell">
+  <MedalDefs/>
+  <header><h1>🎲 Online Ludo</h1><div className="code">Room: <b>{room.code}</b><button className="small" aria-label={muted?'Unmute sounds':'Mute sounds'} onClick={()=>{setMuted(!muted);setMutedUI(!muted)}}>{muted?'🔇':'🔊'}</button></div></header>
   <div className="boardwrap">
    <svg viewBox="0 0 600 600" className={shake?'board shake':'board'}>
     <defs>

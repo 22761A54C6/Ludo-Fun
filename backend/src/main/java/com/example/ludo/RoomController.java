@@ -14,7 +14,10 @@ public class RoomController {
  private final RoomStore store;
  public RoomController(SimpMessagingTemplate bus, RoomStore store) { this.bus=bus; this.store=store; }
  private Room find(String code) {
-  return rooms.computeIfAbsent(code.toUpperCase(), c -> store.load(c).orElse(null));
+  Room r=rooms.computeIfAbsent(code.toUpperCase(), c -> store.load(c).orElse(null));
+  // rooms saved before the lobby existed have no 'started' flag: treat games already in play as started
+  if(r!=null&&!r.started&&(r.dice!=0||r.finished||Arrays.stream(r.tokens).flatMapToInt(Arrays::stream).anyMatch(v->v>=0)))r.started=true;
+  return r;
  }
  public record JoinRequest(String playerId, String name) {}
  public record MoveRequest(String playerId, int token) {}
@@ -27,6 +30,8 @@ public class RoomController {
   public String code; public List<Player> players=new ArrayList<>();
   public int[][] tokens=new int[4][4]; public int turn=0,dice=0,rolls=0;
   public boolean rolled=false, finished=false; public String winner=null;
+  /** false while players wait in the lobby; the host (seat 0, the creator) starts the game */
+  public boolean started=false;
   /** player ids in finishing order: gold, silver, bronze...; the last one appended when the game ends lost */
   public List<String> ranking=new ArrayList<>();
   public Room() {}
@@ -45,6 +50,7 @@ public class RoomController {
   if(room==null)return ResponseEntity.notFound().build();
   synchronized(room) {
    Optional<Player> existing=room.players.stream().filter(p->p.id.equals(req.playerId())).findFirst();
+   if(existing.isEmpty() && room.started)return ResponseEntity.status(409).body(Map.of("error","This game has already started"));
    if(existing.isEmpty() && room.players.size()>=4)return ResponseEntity.status(409).body(Map.of("error","Room is full"));
    if(existing.isEmpty())addPlayer(room,req);
    publish(room);return ResponseEntity.ok(room);
@@ -63,7 +69,7 @@ public class RoomController {
  public ResponseEntity<?> roll(@PathVariable String code,@RequestBody JoinRequest req) {
   Room r=find(code);if(r==null)return ResponseEntity.notFound().build();
   synchronized(r){
-   int seat=seat(r,req.playerId()); if(seat<0||seat!=r.turn||r.rolled||r.finished)return ResponseEntity.badRequest().body(Map.of("error","Not your turn"));
+   int seat=seat(r,req.playerId()); if(seat<0||!r.started||seat!=r.turn||r.rolled||r.finished)return ResponseEntity.badRequest().body(Map.of("error","Not your turn"));
    r.dice=1+(int)(Math.random()*6);r.rolled=true;r.rolls++;
    boolean any=false;for(int t=0;t<4;t++)if(legal(r,seat,t)){any=true;break;}
    if(!any){r.rolled=false;nextTurn(r);}
@@ -75,7 +81,7 @@ public class RoomController {
   Room r=find(code);if(r==null)return ResponseEntity.notFound().build();
   synchronized(r){
    int p=seat(r,req.playerId());int t=req.token();
-   if(p<0||p!=r.turn||!r.rolled||t<0||t>3||!legal(r,p,t))return ResponseEntity.badRequest().body(Map.of("error","Invalid move"));
+   if(p<0||!r.started||p!=r.turn||!r.rolled||t<0||t>3||!legal(r,p,t))return ResponseEntity.badRequest().body(Map.of("error","Invalid move"));
    int old=r.tokens[p][t];r.tokens[p][t]=old<0?0:old+r.dice;
    boolean captured=false;int v=r.tokens[p][t];
    if(v<=51){int sq=(start(p)+v)%52;if(!Set.of(0,8,13,21,26,34,39,47).contains(sq)){
@@ -93,6 +99,18 @@ public class RoomController {
    }
    boolean again=r.dice==6||captured;r.rolled=false;
    if((!again||done)&&!r.finished)nextTurn(r);
+   publish(r);return ResponseEntity.ok(r);
+  }
+ }
+/** the host (the player who created the room) starts the game once at least 2 players are in */
+ @PostMapping("/{code}/start")
+ public ResponseEntity<?> start(@PathVariable String code,@RequestBody JoinRequest req) {
+  Room r=find(code);if(r==null)return ResponseEntity.notFound().build();
+  synchronized(r){
+   if(seat(r,req.playerId())!=0)return ResponseEntity.status(403).body(Map.of("error","Only the host can start the game"));
+   if(r.started)return ResponseEntity.ok(r);
+   if(r.players.size()<2)return ResponseEntity.badRequest().body(Map.of("error","Wait for at least one more player to join"));
+   r.started=true;r.turn=0;
    publish(r);return ResponseEntity.ok(r);
   }
  }
