@@ -281,12 +281,36 @@ function App(){
  if(!room)return <main className="shell"><h1>🎲 Online Ludo</h1><p>Play classic Ludo with up to four friends on different phones.</p>{nameInput}<button disabled={busy||!name.trim()} onClick={create}>Create a room</button><hr/><label>Room code<input value={roomCode} onChange={e=>setRoomCode(e.target.value.toUpperCase())} placeholder="Enter invite code"/></label><button disabled={busy||!roomCode.trim()||!name.trim()} onClick={join}>Join room</button>{error&&<p className="error">{error}</p>}</main>;
 
  const invite=`${location.origin}${location.pathname}?room=${room.code}`;
+ const shareText=`🎲 Join my Ludo game! Room code: ${room.code}`;
+ // the game has started once anyone has rolled or moved; after that, and when all 4 seats are taken, no invites
+ const started=room.dice!==0||room.tokens.some(row=>row.some(v=>v>=0));
+ const canInvite=!started&&!room.finished&&room.players.length<4;
+ async function copyLink(){
+  try{await navigator.clipboard.writeText(invite)}
+  catch{const ta=document.createElement('textarea');ta.value=invite;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}
+  say('🔗 Link copied! Paste it in WhatsApp or Instagram');
+ }
+ async function shareLink(){
+  // native share sheet: lists WhatsApp, Instagram, Telegram, SMS… on phones
+  if(navigator.share){try{await navigator.share({title:'Online Ludo',text:shareText,url:invite});return}catch(e){if(e.name==='AbortError')return}}
+  copyLink();
+ }
+ const whatsapp=`https://wa.me/?text=${encodeURIComponent(shareText+" "+invite)}`;
  const turnColor=COLORS[room.turn]||'#2767b2';
  const winnerName=room.players.find(p=>p.id===room.winner)?.name||'Player';
  const myTier=me&&tierOf(room,me.id);
  return <main className="shell">
   <MedalDefs/>
-  <header><h1>🎲 Online Ludo</h1><div className="code">Room: <b>{room.code}</b> <button className="small" onClick={()=>navigator.clipboard.writeText(invite)}>Copy invite link</button><button className="small" aria-label={muted?'Unmute sounds':'Mute sounds'} onClick={()=>{setMuted(!muted);setMutedUI(!muted)}}>{muted?'🔇':'🔊'}</button></div></header>
+  <header><h1>🎲 Online Ludo</h1><div className="code">Room: <b>{room.code}</b><button className="small" aria-label={muted?'Unmute sounds':'Mute sounds'} onClick={()=>{setMuted(!muted);setMutedUI(!muted)}}>{muted?'🔇':'🔊'}</button></div></header>
+  {canInvite&&<section className="invite">
+   <div className="invite-head"><b>Invite friends</b><span>{room.players.length}/4 joined · code <b>{room.code}</b></span></div>
+   <div className="invite-btns">
+    <button className="share-main" onClick={shareLink}><span aria-hidden="true">📤</span> Share</button>
+    <a className="share-wa" href={whatsapp} target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.4a.5.5 0 0 0 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.2 2.2 2.2 0 0 0 .1-1.3c0-.1-.2-.2-.5-.3Z"/></svg> WhatsApp</a>
+    <button className="secondary" onClick={copyLink}><span aria-hidden="true">🔗</span> Copy link</button>
+   </div>
+   <p className="muted">For Instagram, tap <b>Share</b> and pick Instagram, or copy the link and paste it in a chat.</p>
+  </section>}
   <div className="boardwrap">
    <svg viewBox="0 0 600 600" className={shake?'board shake':'board'}>
     <defs>
@@ -306,7 +330,7 @@ function App(){
    <p>{!me?'You are not a member of this room.':room.finished?'Game over!':myTier?`You finished: ${TIERS[myTier].label}. Watch the others play on.`:myTurn?(room.rolled?'Tap one of your glowing tokens to move.':'Tap the dice in your corner to roll.'):'Waiting for your turn…'} · {room.players.length}/4 players</p></div>
    {room.finished&&<div className="endbtns"><button onClick={()=>setShowResults(true)}>Results</button><button className="secondary" disabled={busy} onClick={()=>act('restart')}>Play again</button></div>}
   </section>
-  {error&&<p className="error">{error}</p>}<button className="secondary" onClick={()=>navigator.clipboard.writeText(invite)}>Share invite link</button>
+  {error&&<p className="error">{error}</p>}
   {confetti&&<Confetti tier={confetti} onDone={()=>setConfetti(null)}/>}
   {overlay&&<ResultOverlay tier={overlay.tier} name={overlay.name} onClose={()=>setOverlay(null)}/>}
   {showResults&&!overlay&&room.finished&&<ResultsPanel room={room} playerId={playerId} busy={busy} onClose={()=>setShowResults(false)} onRestart={()=>act('restart')}/>}

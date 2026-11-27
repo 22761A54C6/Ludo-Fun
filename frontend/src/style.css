@@ -115,3 +115,15 @@
 .row-lost{opacity:.85}
 .results-actions{display:flex;gap:8px}.results-actions button{flex:1}
 @media (prefers-reduced-motion:reduce){.rays,.medal .shine,.medal.pop{animation:none}}
+
+/* ---------- invite card (before the game starts) ---------- */
+.invite{background:white;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;box-shadow:0 2px 10px rgba(0,0,0,.08);border:2px dashed #d8cfbd;animation:fadein .4s ease-out}
+.invite-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.invite-head span{font-size:13px;color:#666}
+.invite-btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.invite-btns>*{display:flex;align-items:center;justify-content:center;gap:6px;padding:11px 8px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;min-height:44px}
+.share-main{background:#2767b2;color:white}
+.share-wa{background:#25d366;color:#08361b}
+.share-wa:focus-visible,.share-main:focus-visible{outline:3px solid #111;outline-offset:2px}
+.invite .muted{font-size:12px}
+@media(max-width:380px){.invite-btns{grid-template-columns:1fr 1fr}.invite-btns .secondary{grid-column:span 2}}
