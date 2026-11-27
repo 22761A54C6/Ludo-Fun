@@ -1,12 +1,11 @@
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM gradle:8.12-jdk21 AS build
 WORKDIR /app
-COPY pom.xml .
-RUN mvn -q -B dependency:go-offline
+COPY settings.gradle build.gradle ./
 COPY src ./src
-RUN mvn -q -B package -DskipTests
+RUN gradle bootJar --no-daemon -q
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=build /app/build/libs/*.jar app.jar
 EXPOSE 8080
 CMD ["java", "-jar", "app.jar"]
