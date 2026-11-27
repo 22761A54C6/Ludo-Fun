@@ -27,6 +27,8 @@ public class RoomController {
   public String code; public List<Player> players=new ArrayList<>();
   public int[][] tokens=new int[4][4]; public int turn=0,dice=0,rolls=0;
   public boolean rolled=false, finished=false; public String winner=null;
+  /** player ids in finishing order: gold, silver, bronze...; the last one appended when the game ends lost */
+  public List<String> ranking=new ArrayList<>();
   public Room() {}
   Room(String code){this.code=code;for(int[] row:tokens)Arrays.fill(row,-1);}
  }
@@ -64,7 +66,7 @@ public class RoomController {
    int seat=seat(r,req.playerId()); if(seat<0||seat!=r.turn||r.rolled||r.finished)return ResponseEntity.badRequest().body(Map.of("error","Not your turn"));
    r.dice=1+(int)(Math.random()*6);r.rolled=true;r.rolls++;
    boolean any=false;for(int t=0;t<4;t++)if(legal(r,seat,t)){any=true;break;}
-   if(!any){r.rolled=false;r.turn=(r.turn+1)%r.players.size();}
+   if(!any){r.rolled=false;nextTurn(r);}
    publish(r);return ResponseEntity.ok(r);
   }
  }
@@ -79,9 +81,36 @@ public class RoomController {
    if(v<=51){int sq=(start(p)+v)%52;if(!Set.of(0,8,13,21,26,34,39,47).contains(sq)){
     for(int q=0;q<r.players.size();q++)if(q!=p)for(int z=0;z<4;z++)if(r.tokens[q][z]>=0&&r.tokens[q][z]<=51&&(start(q)+r.tokens[q][z])%52==sq){r.tokens[q][z]=-1;captured=true;}
    }}
-   if(Arrays.stream(r.tokens[p]).allMatch(x->x==57)){r.finished=true;r.winner=req.playerId();}
+   boolean done=false;
+   if(Arrays.stream(r.tokens[p]).allMatch(x->x==57)&&!r.ranking.contains(req.playerId())){
+    done=true;r.ranking.add(req.playerId());
+    if(r.ranking.size()==1)r.winner=req.playerId();
+    // game ends when only one player is left; that player is last (lost)
+    if(r.ranking.size()>=r.players.size()-1){
+     for(Player pl:r.players)if(!r.ranking.contains(pl.id))r.ranking.add(pl.id);
+     r.finished=true;
+    }
+   }
    boolean again=r.dice==6||captured;r.rolled=false;
-   if(!again&&!r.finished)r.turn=(r.turn+1)%r.players.size();
+   if((!again||done)&&!r.finished)nextTurn(r);
+   publish(r);return ResponseEntity.ok(r);
+  }
+ }
+/** advance to the next player who has not finished yet */
+ private void nextTurn(Room r){
+  for(int i=0;i<r.players.size();i++){
+   r.turn=(r.turn+1)%r.players.size();
+   if(!r.ranking.contains(r.players.get(r.turn).id))return;
+  }
+ }
+ /** start a new game with the same players (any player can ask once the game is over) */
+ @PostMapping("/{code}/restart")
+ public ResponseEntity<?> restart(@PathVariable String code,@RequestBody JoinRequest req) {
+  Room r=find(code);if(r==null)return ResponseEntity.notFound().build();
+  synchronized(r){
+   if(seat(r,req.playerId())<0||!r.finished)return ResponseEntity.badRequest().body(Map.of("error","Game is not over yet"));
+   for(int[] row:r.tokens)Arrays.fill(row,-1);
+   r.turn=0;r.dice=0;r.rolled=false;r.finished=false;r.winner=null;r.ranking.clear();
    publish(r);return ResponseEntity.ok(r);
   }
  }

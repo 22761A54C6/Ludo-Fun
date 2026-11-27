@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {Client} from '@stomp/stompjs';
 import {sfx,unlockAudio,isMuted,setMuted,vibrate} from './sfx.js';
+import {TIERS,tierOf,MedalDefs,Medal,ResultOverlay,ResultsPanel} from './Results.jsx';
 const API=import.meta.env.VITE_API_URL||'http://localhost:8080';
 const WS=import.meta.env.VITE_WS_URL||'http://localhost:8080/ws';
 const COLORS=['#df3939','#229d55','#e7bb28','#3284dc'];
@@ -19,7 +20,8 @@ function cellXY(p,v,t){
  if(v<0){const [r,c]=BASE[p][t];return[c*40+20,r*40+20]}
  if(v<=51){const [r,c]=PATH[(p*13+v)%52];return[c*40+20,r*40+20]}
  if(v<=56){const [r,c]=LANES[p][v-52];return[c*40+20,r*40+20]}
- return[300,300];
+ // finished: sit inside the player's own home triangle
+ return [[262,300],[300,262],[338,300],[300,338]][p];
 }
 
 // top-left corner (SVG units) of each player's base square
@@ -50,8 +52,10 @@ function Dice({x,y,size=58,value,rolling,color,ready,faded,onRoll}){
  </g>;
 }
 
-function Confetti({onDone}){
- const [bits]=useState(()=>Array.from({length:90},(_,i)=>({i,left:Math.random()*100,delay:Math.random()*1.2,dur:2.2+Math.random()*1.8,color:COLORS[i%4],rot:Math.random()*360,w:6+Math.random()*6})));
+const CONFETTI={gold:['#f2c230','#fff4b0','#d62839','#1d4ed8','#ffffff'],silver:['#c3cad3','#ffffff','#1d4ed8','#9aa4b1'],bronze:['#cd7f32','#ffd9b5','#15803d','#f59e0b']};
+function Confetti({onDone,tier='gold'}){
+ const pal=CONFETTI[tier]||COLORS;
+ const [bits]=useState(()=>Array.from({length:tier==='gold'?140:90},(_,i)=>({i,left:Math.random()*100,delay:Math.random()*1.2,dur:2.2+Math.random()*1.8,color:pal[i%pal.length],rot:Math.random()*360,w:6+Math.random()*6})));
  useEffect(()=>{const id=setTimeout(onDone,5000);return()=>clearTimeout(id)},[]);
  return <div className="confetti" onClick={onDone}>{bits.map(b=><i key={b.i} style={{left:b.left+'%',animationDelay:b.delay+'s',animationDuration:b.dur+'s',background:b.color,width:b.w,height:b.w*1.6,'--r':b.rot+'deg'}}/>)}</div>;
 }
@@ -70,7 +74,9 @@ function App(){
  const [rolling,setRolling]=useState(false);
  const [diceSeat,setDiceSeat]=useState(null);  // keeps the dice at the roller's base while effects play
  const [toast,setToast]=useState(null);
- const [confetti,setConfetti]=useState(false);
+ const [confetti,setConfetti]=useState(null);      // tier of confetti burst
+ const [overlay,setOverlay]=useState(null);        // {tier,name} your own result
+ const [showResults,setShowResults]=useState(false);
  const [muted,setMutedUI]=useState(isMuted());
  const prevRef=useRef(null);const timers=useRef([]);
  const later=(fn,ms)=>{timers.current.push(setTimeout(fn,ms))};
@@ -91,7 +97,7 @@ function App(){
   const mySeat=room.players.find(p=>p.id===playerId)?.seat;
   const tokensChanged=JSON.stringify(room.tokens)!==JSON.stringify(prev.tokens);
   const rolledNow=(room.rolls??0)!==(prev.rolls??0)||(room.rolled&&!prev.rolled);
-  let turnDelay=0;
+  let turnDelay=0,fxDelay=0;
 
   if(rolledNow){
    const passed=!room.rolled&&room.turn!==prev.turn;
@@ -121,7 +127,7 @@ function App(){
      setHop({p:mover.p,t:mover.t,n:i});
      if(mover.from>=0)sfx.step(i);
     },i*STEP_MS));
-    const end=steps.length*STEP_MS;turnDelay=end+(caps.length?500:100);
+    const end=steps.length*STEP_MS;turnDelay=end+(caps.length?500:100);fxDelay=end+(caps.length?700:250);
     later(()=>{
      setHop(null);
      if(caps.length){
@@ -131,12 +137,32 @@ function App(){
       setFlying(caps.map(c=>`${c.p}-${c.t}`));later(()=>setFlying([]),800);
       say(`💥 ${nameOf(mover.p)} captured ${nameOf(caps[0].p)}!`);
      }
-     if(mover.to===57){sfx.home();if(!room.finished)say(`🏠 ${nameOf(mover.p)} got a token home!`)}
+     if(mover.to===57){sfx.home();if((room.ranking||[]).length===(prev.ranking||[]).length)say(`🏠 ${nameOf(mover.p)} got a token home!`)}
      setView(copy(room.tokens));
      later(()=>setDiceSeat(null),caps.length?400:0);
-     if(room.finished&&!prev.finished)later(()=>{sfx.win();vibrate([100,60,100,60,200]);setConfetti(true)},450);
     },end);
    }
+  }
+
+  // medals: someone finished (and, when the game ends, the last player lost)
+  const oldRank=prev.ranking||[],newRank=room.ranking||[];
+  if(prev.finished&&!room.finished){setShowResults(false);setOverlay(null);setConfetti(null)}   // new game
+  else if(newRank.length>oldRank.length){
+   let t=fxDelay;let mine=null;
+   newRank.slice(oldRank.length).forEach(id=>{
+    const tier=tierOf(room,id);const pl=room.players.find(p=>p.id===id);if(!pl||!tier)return;
+    if(id===playerId){mine={tier,name:pl.name};return}
+    later(()=>{if(tier!=='lost'){sfx.medal();say(`${TIERS[tier].emoji} ${pl.name} won the ${TIERS[tier].label}!`)}else say(`${pl.name} lost`)},t);t+=2100;
+   });
+   if(mine){
+    later(()=>{
+     setOverlay(mine);sfx[mine.tier]();
+     if(mine.tier==='lost')vibrate([300]);else{vibrate([100,60,100,60,220]);later(()=>setConfetti(mine.tier),650)}
+    },t);
+    t+=mine.tier==='lost'?4300:5300;
+   }
+   if(room.finished)later(()=>setShowResults(true),t+300);
+   turnDelay=Math.max(turnDelay,t);
   }
 
   if(room.turn!==prev.turn&&room.turn===mySeat&&!room.finished)later(()=>{sfx.turn();vibrate(40);say('Your turn!')},turnDelay);
@@ -210,10 +236,21 @@ function App(){
   return [0,1,2,3].map(s=>{
    const pl=room.players[s];const [cx,cy]=R(BASE_AREA[s][0]+120,BASE_AREA[s][1]+120);const x=cx-120,y=cy-120;const top=y<300;
    const label=pl?`${pl.name.length>14?pl.name.slice(0,13)+'…':pl.name}${pl.id===playerId?' (You)':''}`:'Waiting…';
-   const isWinner=room.finished&&pl&&pl.id===room.winner;
+   const tier=pl&&tierOf(room,pl.id);
    return <g key={'seat'+s} pointerEvents="none">
-    {!room.finished&&s===active&&pl&&<rect x={x+5} y={y+5} width="230" height="230" rx="10" className="baseglow" fill="none" stroke="white" strokeWidth="6"/>}
-    <text x={x+120} y={top?y+27:y+227} textAnchor="middle" className={pl?'seatname':'seatname empty'}>{isWinner?'🏆 ':''}{label}</text>
+    {!room.finished&&s===active&&pl&&!tier&&<rect x={x+5} y={y+5} width="230" height="230" rx="10" className="baseglow" fill="none" stroke="white" strokeWidth="6"/>}
+    <text x={x+120} y={top?y+27:y+227} textAnchor="middle" className={pl?'seatname':'seatname empty'}>{tier&&tier!=='lost'?TIERS[tier].emoji+' ':''}{label}</text>
+   </g>;
+  });
+ }
+
+ function medals(){
+  return room.players.map(pl=>{
+   const tier=tierOf(room,pl.id);if(!tier)return null;
+   const [cx,cy]=R(BASE_AREA[pl.seat][0]+120,BASE_AREA[pl.seat][1]+120);
+   return <g key={'medal'+pl.id} pointerEvents="none" className="basemedal">
+    <rect x={cx-82} y={cy-82} width="164" height="164" rx="22" fill={tier==='lost'?'rgba(70,70,80,.45)':'rgba(255,253,248,.82)'}/>
+    <g transform={`translate(${cx} ${cy+(tier==='lost'?0:22)})`}><Medal tier={tier} size={tier==='lost'?62:72} uid={'b'+pl.seat}/></g>
    </g>;
   });
  }
@@ -246,7 +283,9 @@ function App(){
  const invite=`${location.origin}${location.pathname}?room=${room.code}`;
  const turnColor=COLORS[room.turn]||'#2767b2';
  const winnerName=room.players.find(p=>p.id===room.winner)?.name||'Player';
+ const myTier=me&&tierOf(room,me.id);
  return <main className="shell">
+  <MedalDefs/>
   <header><h1>🎲 Online Ludo</h1><div className="code">Room: <b>{room.code}</b> <button className="small" onClick={()=>navigator.clipboard.writeText(invite)}>Copy invite link</button><button className="small" aria-label={muted?'Unmute sounds':'Mute sounds'} onClick={()=>{setMuted(!muted);setMutedUI(!muted)}}>{muted?'🔇':'🔊'}</button></div></header>
   <div className="boardwrap">
    <svg viewBox="0 0 600 600" className={shake?'board shake':'board'}>
@@ -258,16 +297,19 @@ function App(){
      <filter id="tokshadow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2.5" stdDeviation="1.8" floodOpacity=".4"/></filter>
     </defs>
     <g transform={`rotate(${rotK*90} 300 300)`}>{board()}</g>
-    {stars()}{seats()}{tokens()}{dice()}{effects()}
+    {stars()}{seats()}{tokens()}{medals()}{dice()}{effects()}
    </svg>
    {toast&&<div key={toast.id} className="toast">{toast.msg}</div>}
   </div>
   <section className="controls" style={{'--c':turnColor}}>
-   <div className="status"><b>{room.finished?`🏆 ${winnerName} wins!`:`${room.players[room.turn]?.name}'s turn`}</b>
-   <p>{!me?'You are not a member of this room.':room.finished?'Game over!':myTurn?(room.rolled?'Tap one of your glowing tokens to move.':'Tap the dice in your corner to roll.'):'Waiting for your turn…'} · {room.players.length}/4 players</p></div>
+   <div className="status"><b>{room.finished?`🥇 ${winnerName} won the Gold Medal!`:`${room.players[room.turn]?.name}'s turn`}</b>
+   <p>{!me?'You are not a member of this room.':room.finished?'Game over!':myTier?`You finished: ${TIERS[myTier].label}. Watch the others play on.`:myTurn?(room.rolled?'Tap one of your glowing tokens to move.':'Tap the dice in your corner to roll.'):'Waiting for your turn…'} · {room.players.length}/4 players</p></div>
+   {room.finished&&<div className="endbtns"><button onClick={()=>setShowResults(true)}>Results</button><button className="secondary" disabled={busy} onClick={()=>act('restart')}>Play again</button></div>}
   </section>
   {error&&<p className="error">{error}</p>}<button className="secondary" onClick={()=>navigator.clipboard.writeText(invite)}>Share invite link</button>
-  {confetti&&<Confetti onDone={()=>setConfetti(false)}/>}
+  {confetti&&<Confetti tier={confetti} onDone={()=>setConfetti(null)}/>}
+  {overlay&&<ResultOverlay tier={overlay.tier} name={overlay.name} onClose={()=>setOverlay(null)}/>}
+  {showResults&&!overlay&&room.finished&&<ResultsPanel room={room} playerId={playerId} busy={busy} onClose={()=>setShowResults(false)} onRestart={()=>act('restart')}/>}
  </main>;
 }
 export default App;

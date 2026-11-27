@@ -89,4 +89,37 @@ export const sfx = {
   }),
 };
 
+// medal ceremonies (your own result)
+Object.assign(sfx, {
+  gold: play(() => {
+    // brass-like fanfare + shimmering chord
+    [[523,0,.14],[523,.15,.14],[523,.3,.14],[659,.45,.5],[587,.98,.14],[659,1.13,.14],[784,1.28,.9]]
+      .forEach(([f,d,l]) => { tone(f,l,{type:'sawtooth',delay:d,vol:.07}); tone(f*2,l,{type:'triangle',delay:d,vol:.05}); });
+    [1047,1319,1568,2093].forEach((f,i) => tone(f,1.4,{type:'sine',delay:1.3+i*.06,vol:.05}));
+    [262,330,392].forEach(f => tone(f,1.6,{type:'triangle',delay:1.28,vol:.09}));
+  }),
+  silver: play(() => {
+    [[440,0,.16],[554,.16,.16],[659,.32,.5],[880,.7,.8]].forEach(([f,d,l]) => { tone(f,l,{type:'triangle',delay:d,vol:.13}); tone(f*2,l*.7,{type:'sine',delay:d,vol:.04}); });
+    [220,277,330].forEach(f => tone(f,1.2,{type:'triangle',delay:.7,vol:.07}));
+  }),
+  bronze: play(() => {
+    [[392,0,.18],[494,.18,.18],[587,.36,.7]].forEach(([f,d,l]) => tone(f,l,{type:'triangle',delay:d,vol:.14}));
+    [196,247,294].forEach(f => tone(f,1,{type:'triangle',delay:.36,vol:.07}));
+  }),
+  // descending "wah wah wah waaah"
+  lost: play(() => {
+    [[392,0,.32],[370,.38,.32],[349,.76,.32]].forEach(([f,d,l]) => tone(f,l,{type:'triangle',delay:d,vol:.16}));
+    const c = ac(); if (!c) return;
+    const t = c.currentTime + 1.16, o = c.createOscillator(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+    o.type = 'triangle'; o.frequency.setValueAtTime(330, t); o.frequency.linearRampToValueAtTime(300, t + 1.1);
+    lfo.frequency.value = 6; lg.gain.value = 7; lfo.connect(lg).connect(o.frequency);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.17, t + .03); g.gain.exponentialRampToValueAtTime(.0001, t + 1.2);
+    o.connect(g).connect(c.destination); o.start(t); lfo.start(t); o.stop(t + 1.25); lfo.stop(t + 1.25);
+  }),
+  // someone else finished
+  medal: play(() => {
+    tone(1047,.25,{vol:.1}); tone(1319,.35,{vol:.1,delay:.12}); tone(1568,.5,{vol:.08,delay:.24});
+  }),
+});
+
 export const vibrate = p => { try { navigator.vibrate?.(p); } catch { /* not supported */ } };
