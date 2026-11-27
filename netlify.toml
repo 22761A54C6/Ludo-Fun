@@ -5,3 +5,5 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  VITE_API_URL = "https://online-ludo-backend-52xb.onrender.com"
+  VITE_WS_URL = "wss://online-ludo-backend-52xb.onrender.com/ws"
