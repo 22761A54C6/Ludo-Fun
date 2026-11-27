@@ -21,16 +21,28 @@ function cellXY(p,v,t){
  return[300,300];
 }
 
-function Dice({value,rolling,color,ready,onRoll}){
+// top-left corner (SVG units) of each player's base square
+const BASE_AREA=[[0,0],[360,0],[360,360],[0,360]];
+
+// SVG dice drawn inside a player's base
+function Dice({x,y,size=64,value,rolling,color,ready,faded,onRoll}){
  const [face,setFace]=useState(value||1);
  useEffect(()=>{
   if(!rolling){if(value)setFace(value);return}
   const id=setInterval(()=>setFace(1+Math.floor(Math.random()*6)),70);
   return()=>clearInterval(id);
  },[rolling,value]);
- return <button className={`dice3d${rolling?' rolling':''}${ready?' ready':''}`} style={{'--c':color}} disabled={!ready} onClick={onRoll} aria-label={ready?'Roll dice':`Dice shows ${value||'nothing yet'}`}>
-  {Array.from({length:9},(_,i)=><span key={i} className={PIPS[face].includes(i)?'pip on':'pip'}/>)}
- </button>;
+ const h=size/2,o=size*.27;
+ const roll=()=>ready&&onRoll();
+ return <g transform={`translate(${x} ${y})`}>
+  <g className={`sdice${rolling?' rolling':''}${ready?' ready':''}`} opacity={faded&&!rolling?.6:1}
+   role="button" tabIndex={ready?0:-1} aria-label={ready?'Roll dice':`Dice shows ${value||'nothing yet'}`}
+   onClick={roll} onKeyDown={e=>(e.key==='Enter'||e.key===' ')&&(e.preventDefault(),roll())} style={{cursor:ready?'pointer':'default'}}>
+   <rect x={-h} y={-h+6} width={size} height={size} rx="13" fill="rgba(0,0,0,.28)"/>
+   <rect x={-h} y={-h} width={size} height={size} rx="13" fill="url(#diceFace)" stroke={color} strokeWidth="4"/>
+   {Array.from({length:9},(_,i)=>PIPS[face].includes(i)&&<circle key={i} cx={(i%3-1)*o} cy={(Math.floor(i/3)-1)*o} r={size*.085} fill="#1b1b1b"/>)}
+  </g>
+ </g>;
 }
 
 function Confetti({onDone}){
@@ -51,6 +63,7 @@ function App(){
  const [bursts,setBursts]=useState([]);        // capture explosions
  const [shake,setShake]=useState(false);
  const [rolling,setRolling]=useState(false);
+ const [diceSeat,setDiceSeat]=useState(null);  // keeps the dice at the roller's base while effects play
  const [toast,setToast]=useState(null);
  const [confetti,setConfetti]=useState(false);
  const [muted,setMutedUI]=useState(isMuted());
@@ -76,12 +89,16 @@ function App(){
   let turnDelay=0;
 
   if(rolledNow){
-   sfx.dice();setRolling(true);turnDelay=DICE_MS+150;
+   const passed=!room.rolled&&room.turn!==prev.turn;
+   sfx.dice();setRolling(true);setDiceSeat(prev.turn);
+   turnDelay=passed?DICE_MS+900:DICE_MS+150;
    later(()=>{
     setRolling(false);
     if(room.dice===6){sfx.six();say(`${nameOf(prev.turn)} rolled a 6! 🎉`)}
-    else if(!room.rolled&&room.turn!==prev.turn)say(`${nameOf(prev.turn)} rolled ${room.dice} — no moves`);
+    else if(passed)say(`${nameOf(prev.turn)} rolled ${room.dice} — no moves`);
    },DICE_MS);
+   // let everyone see the result before the dice moves to the next player
+   later(()=>setDiceSeat(null),passed?DICE_MS+900:DICE_MS);
   }
 
   if(tokensChanged){
@@ -93,6 +110,7 @@ function App(){
     const start=copy(room.tokens);start[mover.p][mover.t]=mover.from;caps.forEach(c=>start[c.p][c.t]=c.from);setView(start);
     const steps=[];if(mover.from<0)steps.push(0);else for(let v=mover.from+1;v<=mover.to;v++)steps.push(v);
     if(mover.from<0)sfx.out();
+    setDiceSeat(mover.p);
     steps.forEach((s,i)=>later(()=>{
      setView(cur=>{const n=copy(cur||room.tokens);n[mover.p][mover.t]=s;return n});
      setHop({p:mover.p,t:mover.t,n:i});
@@ -110,6 +128,7 @@ function App(){
      }
      if(mover.to===57){sfx.home();if(!room.finished)say(`🏠 ${nameOf(mover.p)} got a token home!`)}
      setView(copy(room.tokens));
+     later(()=>setDiceSeat(null),caps.length?400:0);
      if(room.finished&&!prev.finished)later(()=>{sfx.win();vibrate([100,60,100,60,200]);setConfetti(true)},450);
     },end);
    }
@@ -155,6 +174,28 @@ function App(){
   });
  }
 
+ // name in each player's coloured band, glow on the active base
+ function seats(){
+  const active=diceSeat??room.turn;
+  return [0,1,2,3].map(s=>{
+   const pl=room.players[s];const [x,y]=BASE_AREA[s];const top=y===0;
+   const label=pl?`${pl.name.length>14?pl.name.slice(0,13)+'…':pl.name}${pl.id===playerId?' (You)':''}`:'Waiting…';
+   const isWinner=room.finished&&pl&&pl.id===room.winner;
+   return <g key={'seat'+s} pointerEvents="none">
+    {!room.finished&&s===active&&pl&&<rect x={x+5} y={y+5} width="230" height="230" rx="10" className="baseglow" fill="none" stroke="white" strokeWidth="6"/>}
+    <text x={x+120} y={top?y+27:y+227} textAnchor="middle" className={pl?'seatname':'seatname empty'}>{isWinner?'🏆 ':''}{label}</text>
+   </g>;
+  });
+ }
+
+ function dice(){
+  if(room.finished)return null;
+  const s=diceSeat??room.turn;const [x,y]=BASE_AREA[s];
+  const ready=myTurn&&s===me.seat&&!room.rolled&&!busy&&!animating;
+  return <Dice x={x+120} y={y+120} value={room.dice} rolling={rolling} color={COLORS[s]} ready={ready}
+   faded={!rolling&&!room.rolled&&diceSeat==null} onRoll={()=>act('roll')}/>;
+ }
+
  function effects(){
   return bursts.map(b=><g key={b.id} transform={`translate(${b.x} ${b.y})`} pointerEvents="none">
    <circle r="12" className="shock" fill="none" stroke={b.color} strokeWidth="4"/>
@@ -172,17 +213,17 @@ function App(){
  const winnerName=room.players.find(p=>p.id===room.winner)?.name||'Player';
  return <main className="shell">
   <header><h1>🎲 Online Ludo</h1><div className="code">Room: <b>{room.code}</b> <button className="small" onClick={()=>navigator.clipboard.writeText(invite)}>Copy invite link</button><button className="small" aria-label={muted?'Unmute sounds':'Mute sounds'} onClick={()=>{setMuted(!muted);setMutedUI(!muted)}}>{muted?'🔇':'🔊'}</button></div></header>
-  <div className="players">{room.players.map(p=><div className={room.turn===p.seat&&!room.finished?'player active':'player'} style={{'--c':COLORS[p.seat]}} key={p.id}><span style={{color:COLORS[p.seat]}}>●</span> {p.name}{p.id===playerId?' (You)':''}</div>)}</div>
   <div className="boardwrap">
-   <svg viewBox="0 0 600 600" className={shake?'board shake':'board'}>{board()}{tokens()}{effects()}</svg>
+   <svg viewBox="0 0 600 600" className={shake?'board shake':'board'}>
+    <defs><linearGradient id="diceFace" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fff"/><stop offset="1" stopColor="#e4e4e4"/></linearGradient></defs>
+    {board()}{seats()}{tokens()}{dice()}{effects()}
+   </svg>
    {toast&&<div key={toast.id} className="toast">{toast.msg}</div>}
   </div>
   <section className="controls" style={{'--c':turnColor}}>
-   <Dice value={room.dice} rolling={rolling} color={turnColor} ready={myTurn&&!room.rolled&&!room.finished&&!busy&&!animating} onRoll={()=>act('roll')}/>
-   <div className="status"><b>{room.finished?`🏆 ${winnerName} wins!`:room.players[room.turn]?.name+"'s turn"}</b><p>{room.players.length}/4 players joined</p></div>
-   <button disabled={!myTurn||room.rolled||room.finished||busy||animating} onClick={()=>act('roll')}>Roll dice</button>
+   <div className="status"><b>{room.finished?`🏆 ${winnerName} wins!`:`${room.players[room.turn]?.name}'s turn`}</b>
+   <p>{!me?'You are not a member of this room.':room.finished?'Game over!':myTurn?(room.rolled?'Tap one of your glowing tokens to move.':'Tap the dice in your corner to roll.'):'Waiting for your turn…'} · {room.players.length}/4 players</p></div>
   </section>
-  <p className="muted">{!me?'You are not a member of this room.':room.finished?'Game over!':myTurn?(room.rolled?'Tap one of your glowing tokens to move.':'Tap the dice to roll.'):'Waiting for your turn…'}</p>
   {error&&<p className="error">{error}</p>}<button className="secondary" onClick={()=>navigator.clipboard.writeText(invite)}>Share invite link</button>
   {confetti&&<Confetti onDone={()=>setConfetti(false)}/>}
  </main>;
