@@ -2,6 +2,7 @@ import React,{useEffect,useRef,useState} from 'react';
 import {Client} from '@stomp/stompjs';
 import {sfx,unlockAudio,isMuted,setMuted,vibrate} from './sfx.js';
 import {TIERS,tierOf,MedalDefs,Medal,ResultOverlay,ResultsPanel} from './Results.jsx';
+import {startRecording,voiceSupported} from './voice.js';
 const API=import.meta.env.VITE_API_URL||'http://localhost:8080';
 const WS=import.meta.env.VITE_WS_URL||'http://localhost:8080/ws';
 const COLORS=['#df3939','#229d55','#e7bb28','#3284dc'];
@@ -78,6 +79,10 @@ function App(){
  const [overlay,setOverlay]=useState(null);        // {tier,name} your own result
  const [showResults,setShowResults]=useState(false);
  const [muted,setMutedUI]=useState(isMuted());
+ const [voiceOn,setVoiceOn]=useState(false);       // server has a Gemini key
+ const [mic,setMic]=useState('idle');              // idle | listening | thinking
+ const recRef=useRef(null);
+ useEffect(()=>{if(!voiceSupported())return;fetch(`${API}/api/rooms/voice/status`).then(r=>r.json()).then(d=>setVoiceOn(!!d.enabled)).catch(()=>{})},[]);
  const prevRef=useRef(null);const timers=useRef([]);
  const later=(fn,ms)=>{timers.current.push(setTimeout(fn,ms))};
  const say=msg=>{const id=Date.now()+Math.random();setToast({msg,id});later(()=>setToast(t=>t?.id===id?null:t),2000)};
@@ -179,6 +184,24 @@ function App(){
  // quarter turns (clockwise) so the viewer's own corner is drawn bottom-left
  const rotK=me?(3-me.seat+4)%4:0;
  const R=(x,y)=>{let a=x,b=y;for(let i=0;i<rotK;i++)[a,b]=[600-b,a];return[a,b]};
+ // ---------- voice: record a clip, the server asks Gemini, and rolls if you said "roll" ----------
+ const canVoice=myTurn&&!room?.rolled&&!busy&&!animating&&!!room?.started;
+ async function talk(){
+  if(mic==='listening'){recRef.current?.stop();return}
+  if(mic!=='idle'||!canVoice)return;
+  let rec;
+  try{rec=await startRecording(4000)}catch{setError('Microphone blocked. Allow microphone access for this site to use voice.');return}
+  recRef.current=rec;setMic('listening');setError('');
+  const audio=await rec.result;recRef.current=null;setMic('thinking');
+  try{
+   const r=await fetch(`${API}/api/rooms/${room.code}/voice`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({playerId,audio,mimeType:'audio/wav'})});
+   const data=await r.json();
+   if(!r.ok)throw Error(data.error||'Voice failed');
+   if(data.action==='roll'){if(data.room)setRoom(data.room)}
+   else say(data.heard?`🎤 Heard “${data.heard.slice(0,30)}” — say “roll the dice”`:'🎤 Didn’t catch that — say “roll”');
+  }catch(e){setError(e.message)}
+  finally{setMic('idle')}
+ }
  async function act(action,token){await request(`/api/rooms/${room.code}/${action}`,action==='move'?{playerId,token}:{playerId,name})}
  function valid(t){let v=room.tokens[me.seat][t];return room.rolled&&(v<0?room.dice===6:v!==57&&v+room.dice<=57)}
 
@@ -360,6 +383,10 @@ function App(){
   <section className="controls" style={{'--c':turnColor}}>
    <div className="status"><b>{room.finished?`🥇 ${winnerName} won the Gold Medal!`:`${room.players[room.turn]?.name}'s turn`}</b>
    <p>{!me?'You are not a member of this room.':room.finished?'Game over!':myTier?`You finished: ${TIERS[myTier].label}. Watch the others play on.`:myTurn?(room.rolled?'Tap one of your glowing tokens to move.':'Tap the dice in your corner to roll.'):'Waiting for your turn…'} · {room.players.length}/4 players</p></div>
+   {voiceOn&&me&&!room.finished&&!myTier&&<button className={`mic mic-${mic}`} disabled={mic==='thinking'||(mic==='idle'&&!canVoice)} onClick={talk}
+    aria-label={mic==='listening'?'Stop listening':'Roll the dice by voice'}>
+    <span aria-hidden="true">{mic==='thinking'?'⏳':'🎤'}</span>{mic==='listening'?'Listening… tap to stop':mic==='thinking'?'Understanding…':'Say “roll”'}
+   </button>}
    {room.finished&&<div className="endbtns"><button onClick={()=>setShowResults(true)}>Results</button><button className="secondary" disabled={busy} onClick={()=>act('restart')}>Play again</button></div>}
   </section>
   {error&&<p className="error">{error}</p>}

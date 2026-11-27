@@ -1,3 +1,4 @@
+
 databases:
   - name: ludo-db
     databaseName: ludo
@@ -16,3 +17,6 @@ services:
         fromDatabase:
           name: ludo-db
           property: connectionString
+      # Gemini key for voice dice rolls: set its value in the Render dashboard (never commit it)
+      - key: GEMINI_API_KEY
+        sync: false

@@ -13,7 +13,7 @@ public class RoomController {
  private final SimpMessagingTemplate bus;
  private final RoomStore store;
  public RoomController(SimpMessagingTemplate bus, RoomStore store) { this.bus=bus; this.store=store; }
- private Room find(String code) {
+ Room find(String code) {
   Room r=rooms.computeIfAbsent(code.toUpperCase(), c -> store.load(c).orElse(null));
   // rooms saved before the lobby existed have no 'started' flag: treat games already in play as started
   if(r!=null&&!r.started&&(r.dice!=0||r.finished||Arrays.stream(r.tokens).flatMapToInt(Arrays::stream).anyMatch(v->v>=0)))r.started=true;
@@ -132,7 +132,7 @@ public class RoomController {
    publish(r);return ResponseEntity.ok(r);
   }
  }
- private int seat(Room r,String id){for(Player p:r.players)if(p.id.equals(id))return p.seat;return -1;}
+ int seat(Room r,String id){for(Player p:r.players)if(p.id.equals(id))return p.seat;return -1;}
  private int start(int p){return new int[]{0,13,26,39}[p];}
  private boolean legal(Room r,int p,int t){int v=r.tokens[p][t];return v!=57&&(v<0?r.dice==6:v+r.dice<=57);}
  private void publish(Room r){store.save(r);bus.convertAndSend("/topic/rooms/"+r.code,r);}
