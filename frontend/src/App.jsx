@@ -82,7 +82,21 @@ function App(){
  const [voiceOn,setVoiceOn]=useState(false);       // server has a Gemini key
  const [mic,setMic]=useState('idle');              // idle | listening | thinking
  const recRef=useRef(null);
- useEffect(()=>{if(!voiceSupported())return;fetch(`${API}/api/rooms/voice/status`).then(r=>r.json()).then(d=>setVoiceOn(!!d.enabled)).catch(()=>{})},[]);
+ // Voice dice is for the app owner only. Open the site once with ?owner=YOUR_CODE to unlock this device
+ // (?owner=off removes it). The code is checked by the server; the mic shows only when it matches.
+ const [ownerCode]=useState(()=>{
+  const q=new URLSearchParams(location.search);const o=q.get('owner');
+  if(o!==null){
+   if(o&&o!=='off')localStorage.setItem('ludo-owner',o);else localStorage.removeItem('ludo-owner');
+   q.delete('owner');history.replaceState({},'',location.pathname+(q.toString()?'?'+q:''));
+  }
+  return localStorage.getItem('ludo-owner')||'';
+ });
+ useEffect(()=>{
+  if(!ownerCode||!voiceSupported())return;
+  fetch(`${API}/api/rooms/voice/status`,{headers:{'X-Owner-Code':ownerCode}}).then(r=>r.json())
+   .then(d=>{setVoiceOn(d.enabled===true&&d.owner===true);if(d.enabled===true&&d.owner===false)localStorage.removeItem('ludo-owner')}).catch(()=>{});
+ },[]);
  const prevRef=useRef(null);const timers=useRef([]);
  const later=(fn,ms)=>{timers.current.push(setTimeout(fn,ms))};
  const say=msg=>{const id=Date.now()+Math.random();setToast({msg,id});later(()=>setToast(t=>t?.id===id?null:t),2000)};
@@ -213,7 +227,7 @@ function App(){
   recRef.current=rec;setMic('listening');setError('');
   const audio=await rec.result;recRef.current=null;setMic('thinking');
   try{
-   const r=await fetch(`${API}/api/rooms/${room.code}/voice`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({playerId,audio,mimeType:'audio/wav'})});
+   const r=await fetch(`${API}/api/rooms/${room.code}/voice`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({playerId,audio,mimeType:'audio/wav',ownerCode})});
    const data=await r.json();
    if(!r.ok)throw Error(data.error||'Voice failed');
    if(data.action==='roll'){if(data.room)setRoom(data.room)}

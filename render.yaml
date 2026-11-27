@@ -20,3 +20,6 @@ services:
       # Gemini key for voice dice rolls: set its value in the Render dashboard (never commit it)
       - key: GEMINI_API_KEY
         sync: false
+      # secret that unlocks voice dice for the app owner only (set in the Render dashboard)
+      - key: OWNER_CODE
+        sync: false

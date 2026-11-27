@@ -45,26 +45,44 @@ public class VoiceController {
  private final String apiKey = System.getenv("GEMINI_API_KEY");
  private final String model = envOr("GEMINI_MODEL", "gemini-3.1-flash-lite");
  private final Map<String, Long> lastCall = new ConcurrentHashMap<>();
+ /** secret that unlocks voice dice; only the app owner knows it (set OWNER_CODE on the server) */
+ private final String ownerCode = System.getenv("OWNER_CODE");
+ private long failWindowStart = 0; private int failCount = 0;   // guards against guessing the owner code
 
  public VoiceController(RoomController rooms, ObjectMapper json) {
   this.rooms = rooms; this.json = json;
-  if (enabled()) log.info("Voice control enabled (Gemini model {})", model);
-  else log.warn("GEMINI_API_KEY not set: voice control is off");
+  if (!enabled()) log.warn("GEMINI_API_KEY or OWNER_CODE not set: voice control is off");
+  else log.info("Voice control enabled for the owner (Gemini model {})", model);
  }
 
- public record VoiceRequest(String playerId, String audio, String mimeType) {}
+ public record VoiceRequest(String playerId, String audio, String mimeType, String ownerCode) {}
 
- private boolean enabled() { return apiKey != null && !apiKey.isBlank(); }
+ private boolean enabled() { return apiKey != null && !apiKey.isBlank() && ownerCode != null && !ownerCode.isBlank(); }
+
+ /** constant-time check of the owner code; after 20 wrong tries in 10 minutes, every check fails until the window ends */
+ private synchronized boolean isOwner(String given) {
+  if (!enabled() || given == null || given.isBlank()) return false;
+  long now = System.currentTimeMillis();
+  if (now - failWindowStart > 600_000) { failWindowStart = now; failCount = 0; }
+  if (failCount >= 20) return false;
+  boolean ok = java.security.MessageDigest.isEqual(given.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+   ownerCode.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  if (!ok) failCount++;
+  return ok;
+ }
  private static String envOr(String k, String d) { String v = System.getenv(k); return v == null || v.isBlank() ? d : v; }
  private static ResponseEntity<?> err(int status, String msg) { return ResponseEntity.status(status).body(Map.of("error", msg)); }
 
- /** lets the frontend hide the mic button when no key is configured */
+ /** tells the frontend whether this device holds the owner code; the mic is shown only when owner is true */
  @GetMapping("/voice/status")
- public Map<String, Object> status() { return Map.of("enabled", enabled()); }
+ public Map<String, Object> status(@RequestHeader(value = "X-Owner-Code", required = false) String given) {
+  return Map.of("enabled", enabled(), "owner", isOwner(given));
+ }
 
  @PostMapping("/{code}/voice")
  public ResponseEntity<?> voice(@PathVariable String code, @RequestBody VoiceRequest req) {
   if (!enabled()) return err(503, "Voice control is not set up on the server");
+  if (!isOwner(req.ownerCode())) return err(403, "Voice dice is only for the app owner");
   RoomController.Room r = rooms.find(code);
   if (r == null) return err(404, "Room not found");
   if (req.playerId() == null || req.audio() == null || req.audio().isBlank()) return err(400, "No audio received");
