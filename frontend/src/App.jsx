@@ -5,9 +5,10 @@ const API=import.meta.env.VITE_API_URL||'http://localhost:8080';
 const WS=import.meta.env.VITE_WS_URL||'http://localhost:8080/ws';
 const COLORS=['#df3939','#229d55','#e7bb28','#3284dc'];
 const NAMES=['Red','Green','Yellow','Blue'];
+const LIGHT=[{hi:'#f37171',dark:'#b52424',soft:'#fde3e3'},{hi:'#45c47a',dark:'#15773e',soft:'#dcf4e6'},{hi:'#f8d75e',dark:'#bf950f',soft:'#fcf3d2'},{hi:'#63a8f0',dark:'#1c5ea8',soft:'#deebfb'}];
 const PATH=[[6,1],[6,2],[6,3],[6,4],[6,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],[0,7],[0,8],[1,8],[2,8],[3,8],[4,8],[5,8],[6,9],[6,10],[6,11],[6,12],[6,13],[6,14],[7,14],[8,14],[8,13],[8,12],[8,11],[8,10],[8,9],[9,8],[10,8],[11,8],[12,8],[13,8],[14,8],[14,7],[14,6],[13,6],[12,6],[11,6],[10,6],[9,6],[8,5],[8,4],[8,3],[8,2],[8,1],[8,0],[7,0],[6,0]];
 const LANES=[[[7,1],[7,2],[7,3],[7,4],[7,5]],[[1,7],[2,7],[3,7],[4,7],[5,7]],[[7,13],[7,12],[7,11],[7,10],[7,9]],[[13,7],[12,7],[11,7],[10,7],[9,7]]];
-const BASE=[[[1.5,1.5],[4.5,1.5],[1.5,4.5],[4.5,4.5]],[[1.5,10.5],[4.5,10.5],[1.5,13.5],[4.5,13.5]],[[10.5,10.5],[13.5,10.5],[10.5,13.5],[13.5,13.5]],[[10.5,1.5],[13.5,1.5],[10.5,4.5],[13.5,4.5]]];
+const BASE=[[[1.3,1.3],[3.7,1.3],[1.3,3.7],[3.7,3.7]],[[1.3,10.3],[3.7,10.3],[1.3,12.7],[3.7,12.7]],[[10.3,10.3],[12.7,10.3],[10.3,12.7],[12.7,12.7]],[[10.3,1.3],[12.7,1.3],[10.3,3.7],[12.7,3.7]]];
 const safe=[0,8,13,21,26,34,39,47];
 const STEP_MS=170, DICE_MS=650;
 const PIPS={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
@@ -25,7 +26,7 @@ function cellXY(p,v,t){
 const BASE_AREA=[[0,0],[360,0],[360,360],[0,360]];
 
 // SVG dice drawn inside a player's base
-function Dice({x,y,size=64,value,rolling,color,ready,faded,onRoll}){
+function Dice({x,y,size=58,value,rolling,color,ready,faded,onRoll}){
  const [face,setFace]=useState(value||1);
  useEffect(()=>{
   if(!rolling){if(value)setFace(value);return}
@@ -35,12 +36,16 @@ function Dice({x,y,size=64,value,rolling,color,ready,faded,onRoll}){
  const h=size/2,o=size*.27;
  const roll=()=>ready&&onRoll();
  return <g transform={`translate(${x} ${y})`}>
+  <circle r={h+11} fill="white" stroke={color} strokeWidth="4" opacity=".95"/>
+  <circle r={h+11} fill="none" stroke={color} strokeWidth="8" opacity=".18"/>
   <g className={`sdice${rolling?' rolling':''}${ready?' ready':''}`} opacity={faded&&!rolling?.6:1}
    role="button" tabIndex={ready?0:-1} aria-label={ready?'Roll dice':`Dice shows ${value||'nothing yet'}`}
    onClick={roll} onKeyDown={e=>(e.key==='Enter'||e.key===' ')&&(e.preventDefault(),roll())} style={{cursor:ready?'pointer':'default'}}>
-   <rect x={-h} y={-h+6} width={size} height={size} rx="13" fill="rgba(0,0,0,.28)"/>
-   <rect x={-h} y={-h} width={size} height={size} rx="13" fill="url(#diceFace)" stroke={color} strokeWidth="4"/>
-   {Array.from({length:9},(_,i)=>PIPS[face].includes(i)&&<circle key={i} cx={(i%3-1)*o} cy={(Math.floor(i/3)-1)*o} r={size*.085} fill="#1b1b1b"/>)}
+   <rect x={-h+2} y={-h+8} width={size} height={size} rx="14" fill="rgba(0,0,0,.3)"/>
+   <rect x={-h} y={-h+4} width={size} height={size} rx="14" fill="#bdbdbd"/>
+   <rect x={-h} y={-h} width={size} height={size} rx="14" fill="url(#diceFace)" stroke="#9e9e9e" strokeWidth="1.5"/>
+   <rect x={-h+5} y={-h+4} width={size-10} height={size*.35} rx="10" fill="white" opacity=".55"/>
+   {Array.from({length:9},(_,i)=>PIPS[face].includes(i)&&<circle key={i} cx={(i%3-1)*o} cy={(Math.floor(i/3)-1)*o} r={size*.09} fill={face===1?'#d62828':'url(#pip)'}/>)}
   </g>
  </g>;
 }
@@ -142,20 +147,43 @@ function App(){
  async function join(){let r=await request(`/api/rooms/${roomCode.toUpperCase()}/join`,{playerId,name});if(r){setRoomCode(r.code);history.replaceState({},'',`?room=${r.code}`)}}
  const me=room?.players.find(p=>p.id===playerId);const myTurn=!!me&&room.turn===me.seat;
  const animating=rolling||!!hop;
+ // quarter turns (clockwise) so the viewer's own corner is drawn bottom-left
+ const rotK=me?(3-me.seat+4)%4:0;
+ const R=(x,y)=>{let a=x,b=y;for(let i=0;i<rotK;i++)[a,b]=[600-b,a];return[a,b]};
  async function act(action,token){await request(`/api/rooms/${room.code}/${action}`,action==='move'?{playerId,token}:{playerId,name})}
  function valid(t){let v=room.tokens[me.seat][t];return room.rolled&&(v<0?room.dice===6:v!==57&&v+room.dice<=57)}
 
- function board(){let s=[];s.push(<rect key="bg" width="600" height="600" fill="white"/>);[[0,0],[0,9],[9,9],[9,0]].forEach(([r,c],p)=>{s.push(<rect key={'a'+p} x={c*40} y={r*40} width="240" height="240" fill={COLORS[p]} stroke="#333" strokeWidth="2"/>);s.push(<rect key={'b'+p} x={c*40+40} y={r*40+40} width="160" height="160" rx="8" fill="white" stroke={COLORS[p]} strokeWidth="3"/>);BASE[p].forEach(([rr,cc],t)=>s.push(<circle key={`base${p}${t}`} cx={cc*40+20} cy={rr*40+20} r="23" fill="#f4f4f4" stroke={COLORS[p]} strokeWidth="3"/>))});
- PATH.forEach(([r,c],i)=>{let p=[0,13,26,39].indexOf(i);s.push(<rect key={'p'+i} x={c*40} y={r*40} width="40" height="40" fill={p>=0?COLORS[p]:'#fff'} stroke="#777"/>);if(safe.includes(i))s.push(<text key={'s'+i} x={c*40+20} y={r*40+27} textAnchor="middle" fontSize="22" fill="#c99b20">★</text>)});
- LANES.forEach((lane,p)=>lane.forEach(([r,c],i)=>s.push(<rect key={`l${p}${i}`} x={c*40} y={r*40} width="40" height="40" fill={COLORS[p]} stroke="#777"/>)));
- s.push(<path key="c1" d="M240 240H360L300 300Z" fill={COLORS[3]}/>,<path key="c2" d="M360 240V360L300 300Z" fill={COLORS[2]}/>,<path key="c3" d="M360 360H240L300 300Z" fill={COLORS[1]}/>,<path key="c4" d="M240 360V240L300 300Z" fill={COLORS[0]}/>);
- return s}
+ // Static board, drawn in seat-0 orientation; it is rotated as a whole so the viewer sits bottom-left.
+ function board(){
+  const s=[];
+  s.push(<rect key="bg" width="600" height="600" fill="#fbf7ee"/>);
+  // track cells
+  PATH.forEach(([r,c],i)=>{const p=[0,13,26,39].indexOf(i);
+   s.push(<rect key={'p'+i} x={c*40+1} y={r*40+1} width="38" height="38" rx="5" fill={p>=0?`url(#g${p})`:'#ffffff'} stroke={p>=0?LIGHT[p].dark:'#d8cfbd'} strokeWidth="1.5"/>);
+   if(p>=0){const [nr,nc]=PATH[i+1];const dx=nc-c,dy=nr-r;const cx=c*40+20,cy=r*40+20;
+    s.push(<path key={'ar'+i} d={`M${cx+dx*10} ${cy+dy*10} L${cx-dx*6+dy*8} ${cy-dy*6+dx*8} L${cx-dx*6-dy*8} ${cy-dy*6-dx*8}Z`} fill="white" opacity=".9"/>)}
+  });
+  // home lanes
+  LANES.forEach((lane,p)=>lane.forEach(([r,c],i)=>s.push(<rect key={`l${p}${i}`} x={c*40+1} y={r*40+1} width="38" height="38" rx="5" fill={`url(#g${p})`} stroke={LIGHT[p].dark} strokeWidth="1.5"/>)));
+  // bases
+  BASE_AREA.forEach(([x,y],p)=>{
+   s.push(<rect key={'a'+p} x={x+3} y={y+3} width="234" height="234" rx="18" fill={`url(#g${p})`} stroke={LIGHT[p].dark} strokeWidth="3"/>);
+   s.push(<rect key={'b'+p} x={x+38} y={y+38} width="164" height="164" rx="22" fill="#fffdf8" stroke={LIGHT[p].dark} strokeWidth="2" filter="url(#inset)"/>);
+   BASE[p].forEach(([rr,cc],t)=>s.push(<circle key={`base${p}${t}`} cx={cc*40+20} cy={rr*40+20} r="21" fill={LIGHT[p].soft} stroke={COLORS[p]} strokeWidth="3"/>));
+  });
+  // centre home: each triangle points from its own home lane
+  s.push(<path key="c0" d="M240 240V360L300 300Z" fill={`url(#g0)`}/>,<path key="c1" d="M240 240H360L300 300Z" fill={`url(#g1)`}/>,
+   <path key="c2" d="M360 240V360L300 300Z" fill={`url(#g2)`}/>,<path key="c3" d="M360 360H240L300 300Z" fill={`url(#g3)`}/>,
+   <path key="cx" d="M240 240L360 360M360 240L240 360" stroke="white" strokeWidth="2"/>,
+   <circle key="cc" cx="300" cy="300" r="20" fill="#fffdf8" stroke="#c9a227" strokeWidth="3"/>);
+  return s;
+ }
 
  function tokens(){
   const tk=view||room.tokens;const groups={};
-  tk.forEach((row,p)=>row.forEach((v,t)=>{const [x,y]=cellXY(p,v,t);const k=v<0?`b${p}${t}`:`${x},${y}`;(groups[k]=groups[k]||[]).push({p,t,x,y})}));
+  tk.forEach((row,p)=>row.forEach((v,t)=>{const [x,y]=R(...cellXY(p,v,t));const k=v<0?`b${p}${t}`:`${x},${y}`;(groups[k]=groups[k]||[]).push({p,t,x,y})}));
   const OFF=[[-7,-7],[7,-7],[-7,7],[7,7]];const list=[];
-  Object.values(groups).forEach(g=>g.forEach((o,i)=>{const n=g.length;const [dx,dy]=n>1?OFF[i%4]:[0,0];list.push({...o,x:o.x+dx,y:o.y+dy,r:n>1?10:13})}));
+  Object.values(groups).forEach(g=>g.forEach((o,i)=>{const n=g.length;const [dx,dy]=n>1?OFF[i%4]:[0,0];list.push({...o,x:o.x+dx,y:o.y+dy,r:n>1?10.5:14})}));
   // the hopping token is drawn last so it is on top
   list.sort((a,b)=>(hop&&a.p===hop.p&&a.t===hop.t)-(hop&&b.p===hop.p&&b.t===hop.t));
   return list.map(({p,t,x,y,r})=>{
@@ -165,10 +193,12 @@ function App(){
     style={{transform:`translate(${x}px,${y}px)`,transition:fly?'transform .7s cubic-bezier(.4,-0.5,.5,1.3)':`transform ${STEP_MS-30}ms ease-out`,cursor:can?'pointer':'default'}}>
     <g key={hopping?'h'+hop.n:'s'} className={hopping?'hop':fly?'spin':''}>
      {can&&<circle r="19" className="ring" fill="none" stroke="#111" strokeWidth="3"/>}
-     <ellipse cy={r*.75} rx={r*.85} ry={r*.3} fill="rgba(0,0,0,.28)"/>
-     <circle r={r} fill={COLORS[p]} stroke="white" strokeWidth="2.5"/>
-     <circle r={r*.45} fill="white" opacity=".85"/>
-     <circle cx={-r*.4} cy={-r*.45} r={r*.22} fill="white" opacity=".5"/>
+     <ellipse cy={r*.8} rx={r*.95} ry={r*.32} fill="rgba(0,0,0,.3)"/>
+     <circle cy="2.5" r={r} fill={LIGHT[p].dark}/>
+     <circle r={r} fill={`url(#g${p})`} stroke="white" strokeWidth="2.5"/>
+     <circle r={r*.5} fill="white" opacity=".9"/>
+     <circle r={r*.28} fill={COLORS[p]}/>
+     <ellipse cx={-r*.35} cy={-r*.5} rx={r*.32} ry={r*.18} fill="white" opacity=".55"/>
     </g>
    </g>;
   });
@@ -178,7 +208,7 @@ function App(){
  function seats(){
   const active=diceSeat??room.turn;
   return [0,1,2,3].map(s=>{
-   const pl=room.players[s];const [x,y]=BASE_AREA[s];const top=y===0;
+   const pl=room.players[s];const [cx,cy]=R(BASE_AREA[s][0]+120,BASE_AREA[s][1]+120);const x=cx-120,y=cy-120;const top=y<300;
    const label=pl?`${pl.name.length>14?pl.name.slice(0,13)+'…':pl.name}${pl.id===playerId?' (You)':''}`:'Waiting…';
    const isWinner=room.finished&&pl&&pl.id===room.winner;
    return <g key={'seat'+s} pointerEvents="none">
@@ -190,18 +220,23 @@ function App(){
 
  function dice(){
   if(room.finished)return null;
-  const s=diceSeat??room.turn;const [x,y]=BASE_AREA[s];
+  const s=diceSeat??room.turn;const [cx,cy]=R(BASE_AREA[s][0]+120,BASE_AREA[s][1]+120);
   const ready=myTurn&&s===me.seat&&!room.rolled&&!busy&&!animating;
-  return <Dice x={x+120} y={y+120} value={room.dice} rolling={rolling} color={COLORS[s]} ready={ready}
+  return <Dice x={cx} y={cy} value={room.dice} rolling={rolling} color={COLORS[s]} ready={ready}
    faded={!rolling&&!room.rolled&&diceSeat==null} onRoll={()=>act('roll')}/>;
  }
 
+ function stars(){
+  return safe.filter(i=>i%13!==0).map(i=>{const [r,c]=PATH[i];const [x,y]=R(c*40+20,r*40+20);
+   return <path key={'st'+i} transform={`translate(${x} ${y})`} d='M0 -13L3.8 -4.2L13.2 -4L5.6 2L8.2 11.2L0 5.8L-8.2 11.2L-5.6 2L-13.2 -4L-3.8 -4.2Z' fill='#e2b934' stroke='#a8840f' strokeWidth='1.2' pointerEvents='none'/>});
+ }
+
  function effects(){
-  return bursts.map(b=><g key={b.id} transform={`translate(${b.x} ${b.y})`} pointerEvents="none">
+  return bursts.map(b=>{const [bx,by]=R(b.x,b.y);return <g key={b.id} transform={`translate(${bx} ${by})`} pointerEvents="none">
    <circle r="12" className="shock" fill="none" stroke={b.color} strokeWidth="4"/>
    {Array.from({length:14},(_,i)=>{const a=i/14*Math.PI*2,d=34+(i%3)*12;return <circle key={i} r={i%2?3:4.5} className="spark" fill={i%3?b.color:'#ffd23f'} style={{'--dx':`${Math.cos(a)*d}px`,'--dy':`${Math.sin(a)*d}px`}}/>})}
    <text className="pow" y="6" textAnchor="middle" fontSize="22">💥</text>
-  </g>);
+  </g>});
  }
 
  const nameInput=<label>Your player name<input value={name} maxLength="24" autoFocus placeholder="Enter your name" onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&name.trim()&&!busy&&(inviteCode?join():create())}/></label>;
@@ -215,8 +250,15 @@ function App(){
   <header><h1>🎲 Online Ludo</h1><div className="code">Room: <b>{room.code}</b> <button className="small" onClick={()=>navigator.clipboard.writeText(invite)}>Copy invite link</button><button className="small" aria-label={muted?'Unmute sounds':'Mute sounds'} onClick={()=>{setMuted(!muted);setMutedUI(!muted)}}>{muted?'🔇':'🔊'}</button></div></header>
   <div className="boardwrap">
    <svg viewBox="0 0 600 600" className={shake?'board shake':'board'}>
-    <defs><linearGradient id="diceFace" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fff"/><stop offset="1" stopColor="#e4e4e4"/></linearGradient></defs>
-    {board()}{seats()}{tokens()}{dice()}{effects()}
+    <defs>
+     <linearGradient id="diceFace" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ffffff"/><stop offset=".6" stopColor="#f1f1f1"/><stop offset="1" stopColor="#d6d6d6"/></linearGradient>
+     <radialGradient id="pip" cx=".35" cy=".35" r=".7"><stop offset="0" stopColor="#5a5a5a"/><stop offset="1" stopColor="#0e0e0e"/></radialGradient>
+     {LIGHT.map((l,p)=><linearGradient key={p} id={'g'+p} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={l.hi}/><stop offset="1" stopColor={COLORS[p]}/></linearGradient>)}
+     <filter id="inset" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="2" stdDeviation="2.5" floodOpacity=".25"/></filter>
+     <filter id="tokshadow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2.5" stdDeviation="1.8" floodOpacity=".4"/></filter>
+    </defs>
+    <g transform={`rotate(${rotK*90} 300 300)`}>{board()}</g>
+    {stars()}{seats()}{tokens()}{dice()}{effects()}
    </svg>
    {toast&&<div key={toast.id} className="toast">{toast.msg}</div>}
   </div>

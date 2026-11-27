@@ -50,3 +50,6 @@
 @keyframes sroll{0%{transform:none}25%{transform:translate(-10px,-22px) rotate(170deg) scale(1.2)}55%{transform:translate(8px,-10px) rotate(410deg) scale(1.1)}80%{transform:translate(-2px,2px) rotate(690deg)}100%{transform:rotate(720deg)}}
 .controls .status p{margin-top:3px}
 @media (prefers-reduced-motion:reduce){.sdice.ready,.baseglow{animation:none}}
+
+/* ---------- board frame ---------- */
+.board{border:7px solid #6b5338;border-radius:16px;box-shadow:0 10px 28px rgba(60,40,10,.28),inset 0 0 0 2px #a68a62;background:#fbf7ee}
