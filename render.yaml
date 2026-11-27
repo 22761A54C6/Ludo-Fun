@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: online-ludo-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
