@@ -9,10 +9,13 @@ const LANES=[[[7,1],[7,2],[7,3],[7,4],[7,5]],[[1,7],[2,7],[3,7],[4,7],[5,7]],[[7
 const BASE=[[[1.5,1.5],[4.5,1.5],[1.5,4.5],[4.5,4.5]],[[1.5,10.5],[4.5,10.5],[1.5,13.5],[4.5,13.5]],[[10.5,10.5],[13.5,10.5],[10.5,13.5],[13.5,13.5]],[[10.5,1.5],[13.5,1.5],[10.5,4.5],[13.5,4.5]]];
 const safe=[0,8,13,21,26,34,39,47];
 function App(){
- const [name,setName]=useState('Player');const [roomCode,setRoomCode]=useState(new URLSearchParams(location.search).get('room')||'');
- const [room,setRoom]=useState(null);const [playerId]=useState(()=>localStorage.getItem('ludo-player')||crypto.randomUUID());
+ const inviteCode=new URLSearchParams(location.search).get('room')||'';
+ const [name,setName]=useState(()=>localStorage.getItem('ludo-name')||'');const [roomCode,setRoomCode]=useState(inviteCode);
+ const [room,setRoom]=useState(null);const [playerId]=useState(()=>sessionStorage.getItem('ludo-player')||crypto.randomUUID());
  const [error,setError]=useState('');const [busy,setBusy]=useState(false);
- useEffect(()=>localStorage.setItem('ludo-player',playerId),[playerId]);
+ // sessionStorage: each tab/device is its own player, but a refresh keeps the same seat
+ useEffect(()=>sessionStorage.setItem('ludo-player',playerId),[playerId]);
+ useEffect(()=>{if(name.trim())localStorage.setItem('ludo-name',name.trim())},[name]);
  useEffect(()=>{if(!room?.code)return;const client=new Client({brokerURL:WS,reconnectDelay:3000,onConnect:()=>client.subscribe(`/topic/rooms/${room.code}`,m=>setRoom(JSON.parse(m.body))),onStompError:f=>setError(f.headers.message||'Connection error')});client.activate();return()=>client.deactivate()},[room?.code]);
  async function request(path,body){setBusy(true);setError('');try{let r=await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let data=await r.json();if(!r.ok)throw Error(data.error||'Request failed');setRoom(data);return data}catch(e){setError(e.message);return null}finally{setBusy(false)}}
  async function create(){let r=await request('/api/rooms',{playerId,name});if(r){setRoomCode(r.code);history.replaceState({},'',`?room=${r.code}`)}}
@@ -27,7 +30,9 @@ function App(){
  s.push(<path key="c1" d="M240 240H360L300 300Z" fill={COLORS[3]}/>,<path key="c2" d="M360 240V360L300 300Z" fill={COLORS[2]}/>,<path key="c3" d="M360 360H240L300 300Z" fill={COLORS[1]}/>,<path key="c4" d="M240 360V240L300 300Z" fill={COLORS[0]}/>);
  if(room)room.tokens.forEach((row,p)=>row.forEach((v,t)=>{let [x,y]=pos(p,t);s.push(<g key={`t${p}${t}`} onClick={()=>p===me?.seat&&valid(t)&&act('move',t)} style={{cursor:p===me?.seat&&valid(t)?'pointer':'default'}}><circle cx={x} cy={y} r="12" fill={COLORS[p]} stroke={p===me?.seat&&valid(t)?'#111':'white'} strokeWidth={p===me?.seat&&valid(t)?4:2}/><text x={x} y={y+4} textAnchor="middle" fontSize="10" fill={p===2?'#333':'white'}>{t+1}</text></g>)}));
  return s}
- if(!room)return <main className="shell"><h1>🎲 Online Ludo</h1><p>Play classic Ludo with up to four friends on different phones.</p><label>Your player name<input value={name} maxLength="24" onChange={e=>setName(e.target.value)} /></label><button disabled={busy||!name.trim()} onClick={create}>Create a room</button><hr/><label>Room code<input value={roomCode} onChange={e=>setRoomCode(e.target.value.toUpperCase())} placeholder="Enter invite code"/></label><button disabled={busy||!roomCode.trim()||!name.trim()} onClick={join}>Join room</button>{error&&<p className="error">{error}</p>}</main>;
+ const nameInput=<label>Your player name<input value={name} maxLength="24" autoFocus placeholder="Enter your name" onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&name.trim()&&!busy&&(inviteCode?join():create())}/></label>;
+ if(!room&&inviteCode)return <main className="shell"><h1>🎲 Online Ludo</h1><p>You've been invited to room <b>{inviteCode.toUpperCase()}</b>. Enter your name to join.</p>{nameInput}<button disabled={busy||!name.trim()} onClick={join}>Join room {inviteCode.toUpperCase()}</button>{!name.trim()&&<p className="muted">Please enter your name first.</p>}{error&&<p className="error">{error}</p>}<hr/><button className="secondary" onClick={()=>{history.replaceState({},'',location.pathname);location.reload()}}>Create my own room instead</button></main>;
+ if(!room)return <main className="shell"><h1>🎲 Online Ludo</h1><p>Play classic Ludo with up to four friends on different phones.</p>{nameInput}<button disabled={busy||!name.trim()} onClick={create}>Create a room</button><hr/><label>Room code<input value={roomCode} onChange={e=>setRoomCode(e.target.value.toUpperCase())} placeholder="Enter invite code"/></label><button disabled={busy||!roomCode.trim()||!name.trim()} onClick={join}>Join room</button>{error&&<p className="error">{error}</p>}</main>;
  const invite=`${location.origin}${location.pathname}?room=${room.code}`;
  return <main className="shell"><header><h1>🎲 Online Ludo</h1><div className="code">Room: <b>{room.code}</b> <button className="small" onClick={()=>navigator.clipboard.writeText(invite)}>Copy invite link</button></div></header>
  <div className="players">{room.players.map(p=><div className={room.turn===p.seat?'player active':'player'} key={p.id}><span style={{color:COLORS[p.seat]}}>●</span> {p.name}{p.id===playerId?' (You)':''}</div>)}</div>
