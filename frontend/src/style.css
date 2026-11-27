@@ -1,8 +1,4 @@
-*{box-sizing:border-box}body{margin:0;background:#f4f1e9;color:#252525;font-family:system-ui,Arial,sans-serif}.shell{max-width:650px;margin:0 auto;padding:18px;display:flex;flex-direction:column;gap:14px}h1{font-size:25px;margin:0}p{margin:0;color:#666}label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:14px}input{padding:12px;border:1px solid #bbb;border-radius:9px;font-size:16px}button{padding:12px 15px;border:0;border-radius:9px;background:#2767b2;color:white;font-weight:700;font-size:15px;cursor:pointer}button:disabled{opacity:.4}.secondary,.small{background:#eee;color:#222;border:1px solid #ccc}.small{padding:7px 10px;font-size:12px}.board{width:100%;max-width:540px;border:2px solid #827765;border-radius:5px;background:white;align-self:center}.players{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}.player{background:white;border:2px solid #ddd;border-radius:8px;padding:8px 3px;text-align:center;font-size:12px;overflow-wrap:anywhere}.player.active{border-color:#2767b2;background:#e5effc}.code{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.controls{display:flex;align-items:center;justify-content:space-between;gap:12px;background:white;padding:12px;border-radius:12px}.dice{font-size:40px}.error{color:#b00020}.muted{font-size:13px;color:#666}@media(max-width:400px){.shell{padding:9px}.players{grid-template-columns:repeat(2,1fr)}}
-
 /* ---------- game feel ---------- */
-.player.active{border-color:var(--c);background:white;box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 35%,transparent);animation:glow 1.2s ease-in-out infinite}
-@keyframes glow{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--c) 20%,transparent)}}
 .boardwrap{position:relative;align-self:center;width:100%;max-width:540px}
 .board{display:block;max-width:none}
 .board.shake{animation:shake .42s cubic-bezier(.36,.07,.19,.97)}
@@ -22,16 +18,7 @@
 @keyframes pow{0%{transform:scale(.2)}35%{transform:scale(1.9)}100%{transform:scale(1.4);opacity:0}}
 .toast{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);background:rgba(20,20,30,.88);color:white;font-weight:800;font-size:18px;padding:12px 18px;border-radius:14px;white-space:nowrap;pointer-events:none;animation:toast 2s ease forwards;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 @keyframes toast{0%{opacity:0;transform:translate(-50%,-30%) scale(.7)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}20%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-70%)}}
-.controls{border:3px solid var(--c);transition:border-color .3s}
 .status{flex:1;text-align:center}
-.dice3d{width:68px;height:68px;padding:10px;border-radius:15px;background:linear-gradient(145deg,#fff,#e9e9e9);border:3px solid var(--c);display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);gap:3px;box-shadow:0 6px 0 color-mix(in srgb,var(--c) 70%,#000),0 10px 18px rgba(0,0,0,.2);flex:none}
-.dice3d:disabled{opacity:1;cursor:default}
-.dice3d .pip{border-radius:50%}
-.dice3d .pip.on{background:radial-gradient(circle at 35% 35%,#555,#111)}
-.dice3d.ready{animation:ready 1s ease-in-out infinite;cursor:pointer}
-@keyframes ready{50%{transform:translateY(-6px) rotate(-6deg)}}
-.dice3d.rolling{animation:roll .65s cubic-bezier(.3,.6,.4,1)}
-@keyframes roll{0%{transform:none}25%{transform:translate(-8px,-18px) rotate(160deg) scale(1.15)}55%{transform:translate(6px,-8px) rotate(400deg) scale(1.08)}80%{transform:translate(-2px,2px) rotate(690deg)}100%{transform:rotate(720deg)}}
 .confetti{position:fixed;inset:0;pointer-events:auto;overflow:hidden;z-index:10}
 .confetti i{position:absolute;top:-20px;border-radius:2px;animation:fall linear forwards}
 @keyframes fall{to{transform:translateY(110vh) rotate(calc(var(--r) + 720deg))}}
@@ -48,15 +35,9 @@
 @keyframes sready{50%{transform:translateY(-8px) rotate(-7deg) scale(1.06)}}
 .sdice.rolling{animation:sroll .65s cubic-bezier(.3,.6,.4,1)}
 @keyframes sroll{0%{transform:none}25%{transform:translate(-10px,-22px) rotate(170deg) scale(1.2)}55%{transform:translate(8px,-10px) rotate(410deg) scale(1.1)}80%{transform:translate(-2px,2px) rotate(690deg)}100%{transform:rotate(720deg)}}
-.controls .status p{margin-top:3px}
 @media (prefers-reduced-motion:reduce){.sdice.ready,.baseglow{animation:none}}
 
-/* ---------- board frame ---------- */
-.board{border:7px solid #6b5338;border-radius:16px;box-shadow:0 10px 28px rgba(60,40,10,.28),inset 0 0 0 2px #a68a62;background:#fbf7ee}
-
 /* ---------- medals & results ---------- */
-.endbtns{display:flex;gap:8px;margin-top:10px;justify-content:center}
-.controls{flex-direction:column}
 .basemedal{animation:fadein .6s ease-out}
 @keyframes fadein{from{opacity:0}}
 .medal .shine{animation:shine 2.6s ease-in-out infinite}
@@ -116,47 +97,146 @@
 .results-actions{display:flex;gap:8px}.results-actions button{flex:1}
 @media (prefers-reduced-motion:reduce){.rays,.medal .shine,.medal.pop{animation:none}}
 
-/* ---------- invite card (before the game starts) ---------- */
-.invite{background:white;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;box-shadow:0 2px 10px rgba(0,0,0,.08);border:2px dashed #d8cfbd;animation:fadein .4s ease-out}
-.invite-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
-.invite-head span{font-size:13px;color:#666}
-.invite-btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-.invite-btns>*{display:flex;align-items:center;justify-content:center;gap:6px;padding:11px 8px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;min-height:44px}
-.share-main{background:#2767b2;color:white}
-.share-wa{background:#25d366;color:#08361b}
-.share-wa:focus-visible,.share-main:focus-visible{outline:3px solid #111;outline-offset:2px}
-.invite .muted{font-size:12px}
-@media(max-width:380px){.invite-btns{grid-template-columns:1fr 1fr}.invite-btns .secondary{grid-column:span 2}}
 
-/* ---------- waiting room (lobby) ---------- */
-.lobby{position:relative;background:white;border-radius:16px;padding:18px 16px;display:flex;flex-direction:column;gap:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);animation:fadein .4s ease-out}
-.lobby h2{margin:0;font-size:22px;text-align:center}
-.lobby>.muted{text-align:center;margin-top:-6px}
-.lobby-seats{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.lobby-seats li{display:flex;align-items:center;gap:8px;padding:12px 10px;border-radius:12px;border:2px solid var(--c);background:color-mix(in srgb,var(--c) 10%,white);min-height:54px;animation:rise .4s ease-out both}
-.lobby-seats li.empty{border-style:dashed;border-color:#d8cfbd;background:#fbf9f4;animation:none}
-.lobby-dot{width:18px;height:18px;border-radius:50%;background:var(--c);box-shadow:inset 0 -2px 0 rgba(0,0,0,.2);flex:none}
-.empty .lobby-dot{background:#e4ddcc;box-shadow:none;animation:waitdot 1.4s ease-in-out infinite}
-@keyframes waitdot{50%{opacity:.35}}
-.lobby-name{flex:1;font-weight:700;overflow-wrap:anywhere;font-size:15px}
-.empty .lobby-name{color:#9a917f;font-weight:500;font-size:13px}
-.lobby-tag{font-size:11px;font-weight:800;padding:3px 7px;border-radius:999px;white-space:nowrap}
-.lobby-tag.host{background:#fff3c4;color:#8a6400}
-.lobby-tag.you{background:#e5effc;color:#1c5ea8}
-.lobby-start{font-size:18px;padding:15px;border-radius:12px;background:#229d55;box-shadow:0 4px 0 #15773e}
-.lobby-start:not(:disabled){animation:startpulse 1.6s ease-in-out infinite}
-.lobby-start:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 #15773e}
-@keyframes startpulse{50%{box-shadow:0 4px 0 #15773e,0 0 0 7px rgba(34,157,85,.2)}}
-.lobby-hint{text-align:center;margin-top:-4px}
-.lobby-wait{text-align:center;font-size:15px;color:#444;padding:8px 0}
+/* =========================================================
+   Ludo Online: app theme
+   ========================================================= */
+:root{
+ --bg:#0b2f7a;--bg2:#0a2560;--surface:#10398f;--surface2:#1a49a6;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);
+ --text:#eef2fa;--muted:#aebde0;--primary:#3b82f6;--primary-d:#2563eb;--go:#22c55e;--go-d:#16a34a;--danger:#f87171;
+ --r-sm:10px;--r:14px;--r-lg:20px;--shadow:0 10px 30px rgba(0,0,0,.35);
+ color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:radial-gradient(900px 520px at 50% 0%,rgba(80,150,255,.45),transparent 65%),repeating-linear-gradient(45deg,rgba(255,255,255,.035) 0 22px,transparent 22px 44px),repeating-linear-gradient(-45deg,rgba(255,255,255,.035) 0 22px,transparent 22px 44px),linear-gradient(170deg,#1d5fd6,#0e3c9b 45%,#0a2864);background-attachment:fixed;color:var(--text);
+ font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+h1,h2,h3,p{margin:0}
+h2{font-size:18px;font-weight:700;letter-spacing:-.01em}
+h3{font-size:15px;font-weight:700}
+.muted{color:var(--muted);font-size:13px}
+.center{text-align:center}
+.shell{max-width:560px;margin:0 auto;padding:14px 14px 28px;display:flex;flex-direction:column;gap:12px;min-height:100vh}
+
+/* ---------- top bar ---------- */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 2px 4px}
+.brand{display:flex;align-items:center;gap:9px;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.brand b{font-weight:800}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);font-size:12px;color:var(--muted)}
+.chip b{color:var(--text);letter-spacing:.08em;font-size:13px}
+.iconbtn{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:var(--surface2);border:1px solid var(--line);color:var(--text);cursor:pointer;padding:0}
+.iconbtn:hover{background:#24324f}
+
+/* ---------- buttons & fields ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 18px;border-radius:var(--r);border:1px solid transparent;
+ font:inherit;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;transition:transform .12s,background .15s,box-shadow .15s;color:white}
+.btn:active:not(:disabled){transform:translateY(1px) scale(.99)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:focus-visible,.iconbtn:focus-visible,.micbtn:focus-visible,input:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+.btn.lg{min-height:52px;font-size:16px}
+.btn.primary{background:linear-gradient(180deg,#4b8ff8,var(--primary-d));box-shadow:0 6px 18px rgba(37,99,235,.35)}
+.btn.go{background:linear-gradient(180deg,#34d572,var(--go-d));box-shadow:0 6px 18px rgba(22,163,74,.35)}
+.btn.go:not(:disabled){animation:gopulse 1.8s ease-in-out infinite}
+@keyframes gopulse{50%{box-shadow:0 6px 18px rgba(22,163,74,.35),0 0 0 6px rgba(34,197,94,.18)}}
+.btn.secondary{background:var(--surface2);border-color:var(--line2);color:var(--text)}
+.btn.secondary:hover:not(:disabled){background:#24324f}
+.btn.ghost{background:transparent;color:var(--muted);min-height:40px;font-weight:600}
+.btn.wa{background:#1fae54}
+.field{display:flex;flex-direction:column;gap:7px}
+.field span{font-size:13px;font-weight:600;color:var(--muted)}
+input{width:100%;padding:13px 14px;border-radius:var(--r);border:1px solid var(--line2);background:var(--bg2);color:var(--text);font:inherit;font-size:16px}
+input::placeholder{color:#5d6a85}
+.error{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);color:#fecaca;padding:10px 12px;border-radius:var(--r-sm);font-size:14px}
+
+/* ---------- cards ---------- */
+.card{background:linear-gradient(180deg,rgba(16,57,143,.92),rgba(9,37,100,.92));border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px;position:relative;animation:fadein .35s ease-out}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+/* ---------- home ---------- */
+.home{justify-content:center;gap:22px}
+.hero{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}
+.hero h1{font-size:32px;font-weight:800;letter-spacing:-.03em}
+.hero p{color:var(--muted);max-width:320px;font-size:15px;line-height:1.45}
+.logo{filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))}
+.divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.divider:before,.divider:after{content:"";flex:1;height:1px;background:var(--line2)}
+.joinrow{display:flex;gap:8px}
+.joinrow input{text-transform:uppercase;letter-spacing:.12em;font-weight:700}
+.joinrow .btn{flex:none}
+
+/* ---------- avatars & tags ---------- */
+.avatar{display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:50%;background:var(--c);color:white;font-weight:800;font-size:15px;
+ box-shadow:inset 0 -3px 0 rgba(0,0,0,.2),0 0 0 2px rgba(255,255,255,.9)}
+.avatar.lg{width:46px;height:46px;font-size:19px}
+.tag{font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;white-space:nowrap;letter-spacing:.02em}
+.tag.host{background:rgba(250,204,21,.16);color:#fde68a}
+.tag.you{background:rgba(59,130,246,.18);color:#bfdbfe}
+
+/* ---------- waiting room ---------- */
+.lobby-seats{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.lobby-seats li{display:flex;align-items:center;gap:10px;padding:11px;border-radius:var(--r);background:var(--surface2);border:1px solid var(--line);
+ border-left:4px solid var(--c);min-height:58px;animation:rise .35s ease-out both}
+.lobby-seats li.empty{border:1px dashed var(--line2);border-left:4px dashed var(--line2);background:transparent;animation:none}
+.lobby-seats li.empty .avatar{background:transparent;box-shadow:inset 0 0 0 2px var(--line2);animation:waitdot 1.4s ease-in-out infinite}
+.lobby-name{flex:1;min-width:0;font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty .lobby-name{color:var(--muted);font-weight:500;font-size:13px}
+.lobby-wait{text-align:center;color:var(--muted);font-size:15px;padding:6px 0}
+.lobby-wait b{color:var(--text)}
 .dots i{font-style:normal;animation:waitdot 1.2s infinite}.dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}
-@media (prefers-reduced-motion:reduce){.lobby-start,.empty .lobby-dot,.dots i{animation:none}}
+@keyframes waitdot{50%{opacity:.3}}
+.invite-btns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.invite-btns .btn{padding:0 8px;font-size:14px;white-space:nowrap}
+@media(max-width:400px){.invite-btns{grid-template-columns:1fr 1fr}.invite-btns .secondary{grid-column:span 2}.lobby-seats{grid-template-columns:1fr}}
 
-/* ---------- voice roll (mic button) ---------- */
-.controls{flex-wrap:wrap}
-.mic{display:flex;align-items:center;gap:7px;padding:11px 14px;border-radius:999px;background:#2767b2;font-size:14px;white-space:nowrap;min-height:44px}
-.mic span{font-size:18px}
-.mic-listening{background:#d62828;animation:micpulse 1s ease-in-out infinite}
-.mic-thinking{background:#6b7280}
-@keyframes micpulse{50%{box-shadow:0 0 0 8px rgba(214,40,40,.22)}}
-@media (prefers-reduced-motion:reduce){.mic-listening{animation:none}}
+/* ---------- game: player panels at the board corners ---------- */
+.prow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ppanel{display:flex;align-items:center;gap:8px;min-width:0;padding:7px;border-radius:16px;background:linear-gradient(180deg,#123f9a,#0c2f78);
+ border:2px solid rgba(255,255,255,.22);box-shadow:0 6px 16px rgba(3,15,50,.45),inset 0 1px 0 rgba(255,255,255,.18);transition:border-color .25s,box-shadow .25s,transform .25s}
+.ppanel.right{flex-direction:row-reverse;text-align:right}
+.pav{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:12px;background:var(--c);color:white;font-weight:800;font-size:20px;
+ box-shadow:inset 0 -4px 0 rgba(0,0,0,.18),0 0 0 2px rgba(255,255,255,.9)}
+.ptext{display:flex;flex-direction:column;min-width:0;flex:1}
+.pname{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+.pmeta{font-size:11px;color:#b9c8ea;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdice{flex:none;width:52px;height:52px;display:grid;place-items:center}
+.pdice svg{width:52px;height:52px;overflow:visible}
+.pdice-empty{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 2px rgba(255,255,255,.12)}
+.ppanel.active{border-color:var(--c);box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 45%,transparent),0 8px 22px rgba(3,15,50,.5);transform:translateY(-1px)}
+.ppanel.done{opacity:.8}
+.ppanel.empty{opacity:.45;border-style:dashed}
+.ppanel.empty .pav{background:transparent;box-shadow:inset 0 0 0 2px rgba(255,255,255,.35)}
+
+/* ---------- game: board ---------- */
+.boardwrap{position:relative;width:100%;padding:0;border-radius:6px;background:#fff;border:3px solid #fff;box-shadow:0 14px 34px rgba(3,15,50,.55)}
+.board{display:block;width:100%;height:auto;border-radius:3px;background:#fff;border:0;box-shadow:none}
+
+/* ---------- game: hint bar under the bottom panels ---------- */
+.hintbar{display:flex;align-items:center;gap:10px;min-height:52px;padding:6px 6px 6px 14px;border-radius:999px;background:rgba(6,22,64,.55);border:1px solid rgba(255,255,255,.16)}
+.hintbar.ready{background:color-mix(in srgb,var(--c) 28%,rgba(6,22,64,.7));border-color:color-mix(in srgb,var(--c) 70%,white)}
+.hintdot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none;box-shadow:0 0 0 3px rgba(255,255,255,.25)}
+.hinttext{flex:1;font-size:14px;font-weight:600}
+.micbtn{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:white;cursor:pointer;padding:0;flex:none}
+.micbtn:disabled{opacity:.35;cursor:not-allowed}
+.micbtn.mic-listening{background:#dc2626;border-color:#dc2626;animation:micpulse 1s ease-in-out infinite}
+@keyframes micpulse{50%{box-shadow:0 0 0 9px rgba(220,38,38,.25)}}
+.spinner{width:18px;height:18px;border-radius:50%;border:2.5px solid rgba(255,255,255,.25);border-top-color:white;animation:spin360 .8s linear infinite}
+@keyframes spin360{to{transform:rotate(360deg)}}
+.endbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border-radius:18px;background:rgba(6,22,64,.6);border:1px solid rgba(255,255,255,.16)}
+.endtitle{flex:1;font-size:17px;font-weight:800}
+.endbtns{display:flex;gap:8px}
+@media(max-width:400px){.pav{width:38px;height:38px;font-size:17px}.pdice,.pdice svg{width:46px;height:46px}.pname{font-size:13px}.ppanel{padding:6px;gap:6px}}
+
+/* toast above the board / lobby */
+.toast{font-size:16px;background:rgba(10,15,28,.92);border:1px solid var(--line2);backdrop-filter:blur(6px)}
+@media(max-width:400px){.shell{padding:10px 10px 24px}.dock-dice{width:74px;height:74px}.dock-title{font-size:16px}.toast{font-size:14px;white-space:normal;width:max-content;max-width:90%;text-align:center}}
+@media (prefers-reduced-motion:reduce){.btn.go,.micbtn.mic-listening,.dots i,.lobby-seats li.empty .avatar{animation:none}}
+
+/* results panel keeps its light card on the dark backdrop */
+.results-card{color:#1f2430}
+.results-card p{color:#5b6475}
+.results-actions button{min-height:46px;border-radius:14px;border:0;font:inherit;font-size:15px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#4b8ff8,#2563eb);color:white}
+.results-actions button.secondary{background:#e9e4d6;color:#1f2430;border:1px solid #d6cfbd}
+.results-actions button:disabled{opacity:.45}
+.pdice:has(.pdice-empty){width:36px}
+.lobby-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}.lobby-tags{display:flex;gap:4px}.lobby-text .lobby-name{flex:none}

@@ -29,7 +29,7 @@ function cellXY(p,v,t){
 const BASE_AREA=[[0,0],[360,0],[360,360],[0,360]];
 
 // SVG dice drawn inside a player's base
-function Dice({x,y,size=58,value,rolling,color,ready,faded,onRoll}){
+function Dice({x,y,size=58,value,rolling,color,ready,faded,onRoll,bare=false}){
  const [face,setFace]=useState(value||1);
  useEffect(()=>{
   if(!rolling){if(value)setFace(value);return}
@@ -39,9 +39,9 @@ function Dice({x,y,size=58,value,rolling,color,ready,faded,onRoll}){
  const h=size/2,o=size*.27;
  const roll=()=>ready&&onRoll();
  return <g transform={`translate(${x} ${y})`}>
-  <circle r={h+11} fill="white" stroke={color} strokeWidth="4" opacity=".95"/>
-  <circle r={h+11} fill="none" stroke={color} strokeWidth="8" opacity=".18"/>
-  <g className={`sdice${rolling?' rolling':''}${ready?' ready':''}`} opacity={faded&&!rolling?.6:1}
+  {!bare&&<><circle r={h+11} fill="white" stroke={color} strokeWidth="4" opacity=".95"/>
+  <circle r={h+11} fill="none" stroke={color} strokeWidth="8" opacity=".18"/></>}
+  <g className={`sdice${rolling?' rolling':''}${ready?' ready':''}`} opacity={faded&&!rolling?.82:1}
    role="button" tabIndex={ready?0:-1} aria-label={ready?'Roll dice':`Dice shows ${value||'nothing yet'}`}
    onClick={roll} onKeyDown={e=>(e.key==='Enter'||e.key===' ')&&(e.preventDefault(),roll())} style={{cursor:ready?'pointer':'default'}}>
    <rect x={-h+2} y={-h+8} width={size} height={size} rx="14" fill="rgba(0,0,0,.3)"/>
@@ -176,6 +176,25 @@ function App(){
   else if(room.turn!==prev.turn&&room.turn===mySeat&&!room.finished)later(()=>{sfx.turn();vibrate(40);say('Your turn!')},turnDelay);
  },[room]);
 
+ // Auto-move: when only one move is possible (one coin can move, or every movable coin
+ // is in the base so they are all the same move), make it for the player after the dice lands.
+ const autoRef=useRef(null);
+ const onlyMove=r=>{
+  const s=r?.players.find(p=>p.id===playerId)?.seat;
+  if(s==null||!r.started||r.finished||r.turn!==s||!r.rolled)return null;
+  const legal=[0,1,2,3].filter(t=>{const v=r.tokens[s][t];return v<0?r.dice===6:v!==57&&v+r.dice<=57});
+  const spots=new Set(legal.map(t=>r.tokens[s][t]));   // coins on the same spot make the same move
+  return legal.length&&spots.size===1?legal[0]:null;
+ };
+ const autoToken=onlyMove(room);
+ useEffect(()=>{
+  if(autoToken==null||autoRef.current===room.rolls)return;
+  autoRef.current=room.rolls;
+  const rolls=room.rolls;
+  // wait for the dice animation, then check the move is still pending before sending it
+  later(()=>{const cur=prevRef.current;if(cur&&cur.rolls===rolls&&onlyMove(cur)===autoToken)act('move',autoToken)},DICE_MS+450);
+ },[autoToken,room?.rolls]);
+
  async function request(path,body){setBusy(true);setError('');try{let r=await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let data=await r.json();if(!r.ok)throw Error(data.error||'Request failed');setRoom(data);return data}catch(e){setError(e.message);return null}finally{setBusy(false)}}
  async function create(){let r=await request('/api/rooms',{playerId,name});if(r){setRoomCode(r.code);history.replaceState({},'',`?room=${r.code}`)}}
  async function join(){let r=await request(`/api/rooms/${roomCode.toUpperCase()}/join`,{playerId,name});if(r){setRoomCode(r.code);history.replaceState({},'',`?room=${r.code}`)}}
@@ -208,26 +227,28 @@ function App(){
  // Static board, drawn in seat-0 orientation; it is rotated as a whole so the viewer sits bottom-left.
  function board(){
   const s=[];
-  s.push(<rect key="bg" width="600" height="600" fill="#fbf7ee"/>);
-  // track cells
+  // flat style: solid colours, white track, thin grid lines
+  const GRID='#a7b0bb';
+  s.push(<rect key="bg" width="600" height="600" fill="#ffffff"/>);
+  // track cells (start cells in the owner's colour, with a direction arrow)
   PATH.forEach(([r,c],i)=>{const p=[0,13,26,39].indexOf(i);
-   s.push(<rect key={'p'+i} x={c*40+1} y={r*40+1} width="38" height="38" rx="5" fill={p>=0?`url(#g${p})`:'#ffffff'} stroke={p>=0?LIGHT[p].dark:'#d8cfbd'} strokeWidth="1.5"/>);
+   s.push(<rect key={'p'+i} x={c*40} y={r*40} width="40" height="40" fill={p>=0?COLORS[p]:'#ffffff'} stroke={GRID} strokeWidth="1"/>);
    if(p>=0){const [nr,nc]=PATH[i+1];const dx=nc-c,dy=nr-r;const cx=c*40+20,cy=r*40+20;
-    s.push(<path key={'ar'+i} d={`M${cx+dx*10} ${cy+dy*10} L${cx-dx*6+dy*8} ${cy-dy*6+dx*8} L${cx-dx*6-dy*8} ${cy-dy*6-dx*8}Z`} fill="white" opacity=".9"/>)}
+    s.push(<path key={'ar'+i} d={`M${cx-dx*10} ${cy-dy*10}L${cx+dx*10} ${cy+dy*10}M${cx+dx*10-dx*6+dy*6} ${cy+dy*10-dy*6+dx*6}L${cx+dx*10} ${cy+dy*10}L${cx+dx*10-dx*6-dy*6} ${cy+dy*10-dy*6-dx*6}`} fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>)}
   });
   // home lanes
-  LANES.forEach((lane,p)=>lane.forEach(([r,c],i)=>s.push(<rect key={`l${p}${i}`} x={c*40+1} y={r*40+1} width="38" height="38" rx="5" fill={`url(#g${p})`} stroke={LIGHT[p].dark} strokeWidth="1.5"/>)));
-  // bases
+  LANES.forEach((lane,p)=>lane.forEach(([r,c],i)=>s.push(<rect key={`l${p}${i}`} x={c*40} y={r*40} width="40" height="40" fill={COLORS[p]} stroke={GRID} strokeWidth="1"/>)));
+  // bases: solid colour, white yard, four coloured spots
   BASE_AREA.forEach(([x,y],p)=>{
-   s.push(<rect key={'a'+p} x={x+3} y={y+3} width="234" height="234" rx="18" fill={`url(#g${p})`} stroke={LIGHT[p].dark} strokeWidth="3"/>);
-   s.push(<rect key={'b'+p} x={x+38} y={y+38} width="164" height="164" rx="22" fill="#fffdf8" stroke={LIGHT[p].dark} strokeWidth="2" filter="url(#inset)"/>);
-   BASE[p].forEach(([rr,cc],t)=>s.push(<circle key={`base${p}${t}`} cx={cc*40+20} cy={rr*40+20} r="21" fill={LIGHT[p].soft} stroke={COLORS[p]} strokeWidth="3"/>));
+   s.push(<rect key={'a'+p} x={x} y={y} width="240" height="240" fill={COLORS[p]}/>);
+   s.push(<rect key={'b'+p} x={x+40} y={y+40} width="160" height="160" rx="6" fill="#ffffff" stroke="rgba(0,0,0,.12)" strokeWidth="1.5"/>);
+   BASE[p].forEach(([rr,cc],t)=>s.push(<circle key={`base${p}${t}`} cx={cc*40+20} cy={rr*40+20} r="20" fill={COLORS[p]}/>));
   });
   // centre home: each triangle points from its own home lane
-  s.push(<path key="c0" d="M240 240V360L300 300Z" fill={`url(#g0)`}/>,<path key="c1" d="M240 240H360L300 300Z" fill={`url(#g1)`}/>,
-   <path key="c2" d="M360 240V360L300 300Z" fill={`url(#g2)`}/>,<path key="c3" d="M360 360H240L300 300Z" fill={`url(#g3)`}/>,
-   <path key="cx" d="M240 240L360 360M360 240L240 360" stroke="white" strokeWidth="2"/>,
-   <circle key="cc" cx="300" cy="300" r="20" fill="#fffdf8" stroke="#c9a227" strokeWidth="3"/>);
+  s.push(<path key="c0" d="M240 240V360L300 300Z" fill={COLORS[0]}/>,<path key="c1" d="M240 240H360L300 300Z" fill={COLORS[1]}/>,
+   <path key="c2" d="M360 240V360L300 300Z" fill={COLORS[2]}/>,<path key="c3" d="M360 360H240L300 300Z" fill={COLORS[3]}/>,
+   <rect key="cf" x="240" y="240" width="120" height="120" fill="none" stroke={GRID} strokeWidth="1"/>,
+   <rect key="frame" x="0.75" y="0.75" width="598.5" height="598.5" fill="none" stroke="#6b7684" strokeWidth="1.5"/>);
   return s;
  }
 
@@ -256,19 +277,19 @@ function App(){
   });
  }
 
- // name in each player's coloured band, glow on the active base
+ // glow on the active player's base (names live in the corner panels)
  function seats(){
   const active=diceSeat??room.turn;
   return [0,1,2,3].map(s=>{
-   const pl=room.players[s];const [cx,cy]=R(BASE_AREA[s][0]+120,BASE_AREA[s][1]+120);const x=cx-120,y=cy-120;const top=y<300;
-   const label=pl?`${pl.name.length>14?pl.name.slice(0,13)+'…':pl.name}${pl.id===playerId?' (You)':''}`:'Waiting…';
+   const pl=room.players[s];const [cx,cy]=R(BASE_AREA[s][0]+120,BASE_AREA[s][1]+120);const x=cx-120,y=cy-120;
    const tier=pl&&tierOf(room,pl.id);
-   return <g key={'seat'+s} pointerEvents="none">
-    {!room.finished&&s===active&&pl&&!tier&&<rect x={x+5} y={y+5} width="230" height="230" rx="10" className="baseglow" fill="none" stroke="white" strokeWidth="6"/>}
-    <text x={x+120} y={top?y+27:y+227} textAnchor="middle" className={pl?'seatname':'seatname empty'}>{tier&&tier!=='lost'?TIERS[tier].emoji+' ':''}{label}</text>
-   </g>;
+   if(room.finished||s!==active||!pl||tier)return null;
+   return <rect key={'seat'+s} pointerEvents="none" x={x+20} y={y+20} width="200" height="200" rx="12" className="baseglow" fill="none" stroke="white" strokeWidth="5"/>;
   });
  }
+
+ // which screen corner each seat's base is drawn in, after the board is rotated for this viewer
+ const cornerOf=s=>{const [cx,cy]=R(BASE_AREA[s][0]+120,BASE_AREA[s][1]+120);return (cy<300?'t':'b')+(cx<300?'l':'r')};
 
  function medals(){
   return room.players.map(pl=>{
@@ -281,17 +302,9 @@ function App(){
   });
  }
 
- function dice(){
-  if(room.finished)return null;
-  const s=diceSeat??room.turn;const [cx,cy]=R(BASE_AREA[s][0]+120,BASE_AREA[s][1]+120);
-  const ready=myTurn&&s===me.seat&&!room.rolled&&!busy&&!animating;
-  return <Dice x={cx} y={cy} value={room.dice} rolling={rolling} color={COLORS[s]} ready={ready}
-   faded={!rolling&&!room.rolled&&diceSeat==null} onRoll={()=>act('roll')}/>;
- }
-
  function stars(){
   return safe.filter(i=>i%13!==0).map(i=>{const [r,c]=PATH[i];const [x,y]=R(c*40+20,r*40+20);
-   return <path key={'st'+i} transform={`translate(${x} ${y})`} d='M0 -13L3.8 -4.2L13.2 -4L5.6 2L8.2 11.2L0 5.8L-8.2 11.2L-5.6 2L-13.2 -4L-3.8 -4.2Z' fill='#e2b934' stroke='#a8840f' strokeWidth='1.2' pointerEvents='none'/>});
+   return <path key={'st'+i} transform={`translate(${x} ${y})`} d='M0 -13L3.8 -4.2L13.2 -4L5.6 2L8.2 11.2L0 5.8L-8.2 11.2L-5.6 2L-13.2 -4L-3.8 -4.2Z' fill='none' stroke='#7c8794' strokeWidth='1.6' strokeLinejoin='round' pointerEvents='none'/>});
  }
 
  function effects(){
@@ -302,9 +315,30 @@ function App(){
   </g>});
  }
 
- const nameInput=<label>Your player name<input value={name} maxLength="24" autoFocus placeholder="Enter your name" onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&name.trim()&&!busy&&(inviteCode?join():create())}/></label>;
- if(!room&&inviteCode)return <main className="shell"><h1>🎲 Online Ludo</h1><p>You've been invited to room <b>{inviteCode.toUpperCase()}</b>. Enter your name to join.</p>{nameInput}<button disabled={busy||!name.trim()} onClick={join}>Join room {inviteCode.toUpperCase()}</button>{!name.trim()&&<p className="muted">Please enter your name first.</p>}{error&&<p className="error">{error}</p>}<hr/><button className="secondary" onClick={()=>{history.replaceState({},'',location.pathname);location.reload()}}>Create my own room instead</button></main>;
- if(!room)return <main className="shell"><h1>🎲 Online Ludo</h1><p>Play classic Ludo with up to four friends on different phones.</p>{nameInput}<button disabled={busy||!name.trim()} onClick={create}>Create a room</button><hr/><label>Room code<input value={roomCode} onChange={e=>setRoomCode(e.target.value.toUpperCase())} placeholder="Enter invite code"/></label><button disabled={busy||!roomCode.trim()||!name.trim()} onClick={join}>Join room</button>{error&&<p className="error">{error}</p>}</main>;
+ const brand=<div className="brand"><Logo/><span>Ludo <b>Online</b></span></div>;
+ const errorBar=error&&<p className="error" role="alert">{error}</p>;
+ const nameInput=<label className="field"><span>Your name</span><input value={name} maxLength="24" autoFocus placeholder="e.g. Asha" onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&name.trim()&&!busy&&(inviteCode?join():create())}/></label>;
+
+ // ---------- home / invite screens ----------
+ if(!room)return <main className="shell home">
+  <div className="hero"><Logo size={64}/><h1>Ludo Online</h1><p>Classic Ludo for up to four friends, each on their own phone.</p></div>
+  {inviteCode?<section className="card form">
+   <div className="card-head"><h2>You're invited</h2><span className="chip">Room {inviteCode.toUpperCase()}</span></div>
+   {nameInput}
+   <button className="btn primary lg" disabled={busy||!name.trim()} onClick={join}>Join game</button>
+   {errorBar}
+   <button className="btn ghost" onClick={()=>{history.replaceState({},'',location.pathname);location.reload()}}>Create my own room instead</button>
+  </section>:<section className="card form">
+   {nameInput}
+   <button className="btn primary lg" disabled={busy||!name.trim()} onClick={create}>Create a room</button>
+   <div className="divider"><span>or join a friend</span></div>
+   <div className="joinrow">
+    <input aria-label="Room code" value={roomCode} onChange={e=>setRoomCode(e.target.value.toUpperCase())} placeholder="Room code" maxLength="8"/>
+    <button className="btn secondary" disabled={busy||!roomCode.trim()||!name.trim()} onClick={join}>Join</button>
+   </div>
+   {errorBar}
+  </section>}
+ </main>;
 
  const invite=`${location.origin}${location.pathname}?room=${room.code}`;
  const shareText=`🎲 Join my Ludo game! Room code: ${room.code}`;
@@ -313,86 +347,137 @@ function App(){
  async function copyLink(){
   try{await navigator.clipboard.writeText(invite)}
   catch{const ta=document.createElement('textarea');ta.value=invite;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}
-  say('🔗 Link copied! Paste it in WhatsApp or Instagram');
+  say('🔗 Link copied');
  }
  async function shareLink(){
   // native share sheet: lists WhatsApp, Instagram, Telegram, SMS… on phones
-  if(navigator.share){try{await navigator.share({title:'Online Ludo',text:shareText,url:invite});return}catch(e){if(e.name==='AbortError')return}}
+  if(navigator.share){try{await navigator.share({title:'Ludo Online',text:shareText,url:invite});return}catch(e){if(e.name==='AbortError')return}}
   copyLink();
  }
  const whatsapp=`https://wa.me/?text=${encodeURIComponent(shareText+" "+invite)}`;
- const muteBtn=<button className="small" aria-label={muted?'Unmute sounds':'Mute sounds'} onClick={()=>{setMuted(!muted);setMutedUI(!muted)}}>{muted?'🔇':'🔊'}</button>;
- const inviteCard=canInvite&&<section className="invite">
-   <div className="invite-head"><b>Invite friends</b><span>{room.players.length}/4 joined · code <b>{room.code}</b></span></div>
-   <div className="invite-btns">
-    <button className="share-main" onClick={shareLink}><span aria-hidden="true">📤</span> Share</button>
-    <a className="share-wa" href={whatsapp} target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.4a.5.5 0 0 0 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.2 2.2 2.2 0 0 0 .1-1.3c0-.1-.2-.2-.5-.3Z"/></svg> WhatsApp</a>
-    <button className="secondary" onClick={copyLink}><span aria-hidden="true">🔗</span> Copy link</button>
-   </div>
-   <p className="muted">For Instagram, tap <b>Share</b> and pick Instagram, or copy the link and paste it in a chat.</p>
-  </section>;
+ const muteBtn=<button className="iconbtn" aria-label={muted?'Unmute sounds':'Mute sounds'} title={muted?'Unmute':'Mute'} onClick={()=>{setMuted(!muted);setMutedUI(!muted)}}>{muted?<Icon.mute/>:<Icon.sound/>}</button>;
+ const topbar=<header className="topbar">{brand}<div className="topbar-right"><span className="chip">Room <b>{room.code}</b></span>{muteBtn}</div></header>;
+ const initial=n=>(n||'?').trim().charAt(0).toUpperCase()||'?';
 
  // ---------- waiting room: everyone gathers here until the host taps Start ----------
  if(!room.started){
   const host=room.players[0];const isHost=me?.seat===0;const enough=room.players.length>=2;
   return <main className="shell">
-   <header><h1>🎲 Online Ludo</h1><div className="code">Room: <b>{room.code}</b>{muteBtn}</div></header>
-   <section className="lobby">
-    <h2>Waiting room</h2>
-    <p className="muted">{room.players.length}/4 players have joined</p>
+   {topbar}
+   <section className="card lobby">
+    <div className="card-head"><h2>Waiting room</h2><span className="muted">{room.players.length} of 4 joined</span></div>
     <ul className="lobby-seats">
      {[0,1,2,3].map(s=>{const pl=room.players[s];return <li key={s} className={pl?'filled':'empty'} style={{'--c':COLORS[s]}}>
-      <span className="lobby-dot" aria-hidden="true"/>
-      <span className="lobby-name">{pl?pl.name:'Waiting for player…'}</span>
-      {pl&&s===0&&<span className="lobby-tag host">Host</span>}
-      {pl?.id===playerId&&<span className="lobby-tag you">You</span>}
+      <span className="avatar">{pl?initial(pl.name):''}</span>
+      <span className="lobby-text">
+       <span className="lobby-name">{pl?pl.name:'Open seat'}</span>
+       {pl&&(s===0||pl.id===playerId)&&<span className="lobby-tags">
+        {s===0&&<span className="tag host">Host</span>}
+        {pl.id===playerId&&<span className="tag you">You</span>}
+       </span>}
+      </span>
      </li>})}
     </ul>
     {!me?<p className="error">You are not a member of this room.</p>
      :isHost?<>
-      <button className="lobby-start" disabled={busy||!enough} onClick={()=>act('start')}>▶ Start game</button>
-      <p className="muted lobby-hint">{enough?'Everyone in? Tap Start game. Nobody can join once the game starts.':'Invite at least one friend to start the game.'}</p>
+      <button className="btn go lg" disabled={busy||!enough} onClick={()=>act('start')}>Start game</button>
+      <p className="muted center">{enough?'Nobody can join once the game has started.':'Invite at least one friend to start.'}</p>
      </>
-     :<p className="lobby-wait">Waiting for <b>{host?.name}</b> to start the game<span className="dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></p>}
+     :<p className="lobby-wait">Waiting for <b>{host?.name}</b> to start<span className="dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></p>}
     {toast&&<div key={toast.id} className="toast">{toast.msg}</div>}
    </section>
-   {inviteCard}
-   {error&&<p className="error">{error}</p>}
+   {canInvite&&<section className="card invite">
+    <div className="card-head"><h3>Invite friends</h3><span className="muted">Code <b>{room.code}</b></span></div>
+    <div className="invite-btns">
+     <button className="btn primary" onClick={shareLink}><Icon.share/> Share</button>
+     <a className="btn wa" href={whatsapp} target="_blank" rel="noopener noreferrer"><Icon.wa/> WhatsApp</a>
+     <button className="btn secondary" onClick={copyLink}><Icon.link/> Copy link</button>
+    </div>
+   </section>}
+   {errorBar}
   </main>;
  }
- const turnColor=COLORS[room.turn]||'#2767b2';
+
+ // ---------- game ----------
  const winnerName=room.players.find(p=>p.id===room.winner)?.name||'Player';
  const myTier=me&&tierOf(room,me.id);
- return <main className="shell">
+ const ds=diceSeat??room.turn;                         // seat whose dice is shown
+ const dsName=room.players[ds]?.name||NAMES[ds];
+ const mineDice=!!me&&ds===me.seat;
+ const diceReady=!room.finished&&myTurn&&mineDice&&!room.rolled&&!busy&&!animating;
+ const hint=!me?'You are watching this game.'
+  :myTier?`You finished: ${TIERS[myTier].label}`
+  :myTurn&&mineDice?(room.rolled?(autoToken!=null?'Moving your coin…':'Tap a glowing coin to move'):'Your turn: tap your dice to roll')
+  :`${dsName}'s turn`;
+ const showMic=voiceOn&&me?.seat===0&&!room.finished&&!myTier;
+ const at=c=>[0,1,2,3].find(s=>cornerOf(s)===c);
+ // player panel at the board corner next to that player's base; the dice sits in the active player's panel
+ const panel=s=>{
+  const right=cornerOf(s)[1]==='r';const pl=room.players[s];
+  if(!pl)return <div className={`ppanel empty${right?' right':''}`} style={{'--c':COLORS[s]}}><span className="pav"/><div className="ptext"><span className="pname">Empty seat</span></div></div>;
+  const tier=tierOf(room,pl.id);const active=!room.finished&&s===ds&&!tier;const isMe=pl.id===playerId;
+  const home=room.tokens[s].filter(v=>v===57).length;
+  return <div className={`ppanel${active?' active':''}${tier?' done':''}${right?' right':''}`} style={{'--c':COLORS[s]}}>
+   <span className="pav">{initial(pl.name)}</span>
+   <div className="ptext"><span className="pname">{pl.name}</span>
+    <span className="pmeta">{tier?`${TIERS[tier].emoji} ${TIERS[tier].label}`:isMe?`You · ${home}/4`:`${home}/4 home`}</span></div>
+   <div className="pdice">{active
+    ?<svg viewBox="-34 -34 68 68" aria-live="polite"><Dice bare x={0} y={0} size={52} value={room.dice} rolling={rolling} color={COLORS[s]}
+      ready={isMe&&diceReady} faded={!rolling&&!room.rolled&&diceSeat==null} onRoll={()=>act('roll')}/></svg>
+    :<span className="pdice-empty"/>}</div>
+  </div>;
+ };
+ return <main className="shell game">
   <MedalDefs/>
-  <header><h1>🎲 Online Ludo</h1><div className="code">Room: <b>{room.code}</b><button className="small" aria-label={muted?'Unmute sounds':'Mute sounds'} onClick={()=>{setMuted(!muted);setMutedUI(!muted)}}>{muted?'🔇':'🔊'}</button></div></header>
+  <svg width="0" height="0" style={{position:'absolute'}} aria-hidden="true"><defs>
+   <linearGradient id="diceFace" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ffffff"/><stop offset=".6" stopColor="#f3f3f3"/><stop offset="1" stopColor="#dcdcdc"/></linearGradient>
+   <radialGradient id="pip" cx=".35" cy=".35" r=".7"><stop offset="0" stopColor="#5a5a5a"/><stop offset="1" stopColor="#0e0e0e"/></radialGradient>
+   {LIGHT.map((l,p)=><linearGradient key={p} id={'g'+p} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={l.hi}/><stop offset="1" stopColor={COLORS[p]}/></linearGradient>)}
+  </defs></svg>
+  {topbar}
+  <div className="prow top">{panel(at('tl'))}{panel(at('tr'))}</div>
   <div className="boardwrap">
    <svg viewBox="0 0 600 600" className={shake?'board shake':'board'}>
-    <defs>
-     <linearGradient id="diceFace" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ffffff"/><stop offset=".6" stopColor="#f1f1f1"/><stop offset="1" stopColor="#d6d6d6"/></linearGradient>
-     <radialGradient id="pip" cx=".35" cy=".35" r=".7"><stop offset="0" stopColor="#5a5a5a"/><stop offset="1" stopColor="#0e0e0e"/></radialGradient>
-     {LIGHT.map((l,p)=><linearGradient key={p} id={'g'+p} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={l.hi}/><stop offset="1" stopColor={COLORS[p]}/></linearGradient>)}
-     <filter id="inset" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="2" stdDeviation="2.5" floodOpacity=".25"/></filter>
-     <filter id="tokshadow" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2.5" stdDeviation="1.8" floodOpacity=".4"/></filter>
-    </defs>
     <g transform={`rotate(${rotK*90} 300 300)`}>{board()}</g>
-    {stars()}{seats()}{tokens()}{medals()}{dice()}{effects()}
+    {stars()}{seats()}{tokens()}{medals()}{effects()}
    </svg>
    {toast&&<div key={toast.id} className="toast">{toast.msg}</div>}
   </div>
-  <section className="controls" style={{'--c':turnColor}}>
-   <div className="status"><b>{room.finished?`🥇 ${winnerName} won the Gold Medal!`:`${room.players[room.turn]?.name}'s turn`}</b>
-   <p>{!me?'You are not a member of this room.':room.finished?'Game over!':myTier?`You finished: ${TIERS[myTier].label}. Watch the others play on.`:myTurn?(room.rolled?'Tap one of your glowing tokens to move.':'Tap the dice in your corner to roll.'):'Waiting for your turn…'} · {room.players.length}/4 players</p></div>
-   {voiceOn&&me?.seat===0&&!room.finished&&!myTier&&<button className={`mic mic-${mic}`} disabled={mic==='thinking'||(mic==='idle'&&!canVoice)} onClick={talk}
-    aria-label={mic==='listening'?'Stop listening':'Say a dice number'}>
-    <span aria-hidden="true">{mic==='thinking'?'⏳':'🎤'}</span>{mic==='listening'?'Listening… tap to stop':mic==='thinking'?'Understanding…':'Say a number'}
+  <div className="prow bottom">{panel(at('bl'))}{panel(at('br'))}</div>
+  {room.finished?<section className="endbar">
+   <span className="endtitle">🥇 {winnerName} wins!</span>
+   <div className="endbtns"><button className="btn secondary" onClick={()=>setShowResults(true)}>Results</button><button className="btn primary" disabled={busy} onClick={()=>act('restart')}>Play again</button></div>
+  </section>:<section className={`hintbar${diceReady?' ready':''}`} style={{'--c':COLORS[ds]}}>
+   <span className="hintdot"/>
+   <span className="hinttext">{mic==='listening'?'Listening… say a number from 1 to 6':hint}</span>
+   {showMic&&<button className={`micbtn mic-${mic}`} disabled={mic==='thinking'||(mic==='idle'&&!canVoice)} onClick={talk}
+    aria-label={mic==='listening'?'Stop listening':'Say a dice number'} title="Say a number">
+    {mic==='thinking'?<span className="spinner" aria-hidden="true"/>:<Icon.mic/>}
    </button>}
-   {room.finished&&<div className="endbtns"><button onClick={()=>setShowResults(true)}>Results</button><button className="secondary" disabled={busy} onClick={()=>act('restart')}>Play again</button></div>}
-  </section>
-  {error&&<p className="error">{error}</p>}
+  </section>}
+  {errorBar}
   {confetti&&<Confetti tier={confetti} onDone={()=>setConfetti(null)}/>}
   {overlay&&<ResultOverlay tier={overlay.tier} name={overlay.name} onClose={()=>setOverlay(null)}/>}
   {showResults&&!overlay&&room.finished&&<ResultsPanel room={room} playerId={playerId} busy={busy} onClose={()=>setShowResults(false)} onRestart={()=>act('restart')}/>}
  </main>;
 }
+
+// four-colour mark used in the header and on the home screen
+function Logo({size=28}){
+ return <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className="logo">
+  <rect x="1" y="1" width="14" height="14" rx="4" fill={COLORS[0]}/><rect x="17" y="1" width="14" height="14" rx="4" fill={COLORS[1]}/>
+  <rect x="17" y="17" width="14" height="14" rx="4" fill={COLORS[2]}/><rect x="1" y="17" width="14" height="14" rx="4" fill={COLORS[3]}/>
+  <circle cx="16" cy="16" r="5" fill="#fff"/>
+ </svg>;
+}
+
+const svgIcon=d=>()=><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{d}</svg>;
+const Icon={
+ sound:svgIcon(<><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></>),
+ mute:svgIcon(<><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="m22 9-6 6M16 9l6 6"/></>),
+ mic:svgIcon(<><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></>),
+ share:svgIcon(<><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v14"/></>),
+ link:svgIcon(<><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></>),
+ wa:()=><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.4a.5.5 0 0 0 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.2 2.2 2.2 0 0 0 .1-1.3c0-.1-.2-.2-.5-.3Z"/></svg>,
+};
 export default App;
