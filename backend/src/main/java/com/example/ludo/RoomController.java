@@ -67,10 +67,14 @@ public class RoomController {
  }
  @PostMapping("/{code}/roll")
  public ResponseEntity<?> roll(@PathVariable String code,@RequestBody JoinRequest req) {
+  return roll(code,req.playerId(),0);
+ }
+ /** value 1-6 sets the dice (host voice command, server side only); 0 rolls at random */
+ ResponseEntity<?> roll(String code,String playerId,int value) {
   Room r=find(code);if(r==null)return ResponseEntity.notFound().build();
   synchronized(r){
-   int seat=seat(r,req.playerId()); if(seat<0||!r.started||seat!=r.turn||r.rolled||r.finished)return ResponseEntity.badRequest().body(Map.of("error","Not your turn"));
-   r.dice=1+(int)(Math.random()*6);r.rolled=true;r.rolls++;
+   int seat=seat(r,playerId); if(seat<0||!r.started||seat!=r.turn||r.rolled||r.finished)return ResponseEntity.badRequest().body(Map.of("error","Not your turn"));
+   r.dice=value>=1&&value<=6?value:1+(int)(Math.random()*6);r.rolled=true;r.rolls++;
    boolean any=false;for(int t=0;t<4;t++)if(legal(r,seat,t)){any=true;break;}
    if(!any){r.rolled=false;nextTurn(r);}
    publish(r);return ResponseEntity.ok(r);

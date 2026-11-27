@@ -185,7 +185,7 @@ function App(){
  const rotK=me?(3-me.seat+4)%4:0;
  const R=(x,y)=>{let a=x,b=y;for(let i=0;i<rotK;i++)[a,b]=[600-b,a];return[a,b]};
  // ---------- voice: record a clip, the server asks Gemini, and rolls if you said "roll" ----------
- const canVoice=myTurn&&!room?.rolled&&!busy&&!animating&&!!room?.started;
+ const canVoice=me?.seat===0&&myTurn&&!room?.rolled&&!busy&&!animating&&!!room?.started;
  async function talk(){
   if(mic==='listening'){recRef.current?.stop();return}
   if(mic!=='idle'||!canVoice)return;
@@ -198,7 +198,7 @@ function App(){
    const data=await r.json();
    if(!r.ok)throw Error(data.error||'Voice failed');
    if(data.action==='roll'){if(data.room)setRoom(data.room)}
-   else say(data.heard?`🎤 Heard “${data.heard.slice(0,30)}” — say “roll the dice”`:'🎤 Didn’t catch that — say “roll”');
+   else say(data.heard?`🎤 Heard “${data.heard.slice(0,30)}” — say a number 1 to 6`:'🎤 Didn’t catch that — say a number 1 to 6');
   }catch(e){setError(e.message)}
   finally{setMic('idle')}
  }
@@ -383,9 +383,9 @@ function App(){
   <section className="controls" style={{'--c':turnColor}}>
    <div className="status"><b>{room.finished?`🥇 ${winnerName} won the Gold Medal!`:`${room.players[room.turn]?.name}'s turn`}</b>
    <p>{!me?'You are not a member of this room.':room.finished?'Game over!':myTier?`You finished: ${TIERS[myTier].label}. Watch the others play on.`:myTurn?(room.rolled?'Tap one of your glowing tokens to move.':'Tap the dice in your corner to roll.'):'Waiting for your turn…'} · {room.players.length}/4 players</p></div>
-   {voiceOn&&me&&!room.finished&&!myTier&&<button className={`mic mic-${mic}`} disabled={mic==='thinking'||(mic==='idle'&&!canVoice)} onClick={talk}
-    aria-label={mic==='listening'?'Stop listening':'Roll the dice by voice'}>
-    <span aria-hidden="true">{mic==='thinking'?'⏳':'🎤'}</span>{mic==='listening'?'Listening… tap to stop':mic==='thinking'?'Understanding…':'Say “roll”'}
+   {voiceOn&&me?.seat===0&&!room.finished&&!myTier&&<button className={`mic mic-${mic}`} disabled={mic==='thinking'||(mic==='idle'&&!canVoice)} onClick={talk}
+    aria-label={mic==='listening'?'Stop listening':'Say a dice number'}>
+    <span aria-hidden="true">{mic==='thinking'?'⏳':'🎤'}</span>{mic==='listening'?'Listening… tap to stop':mic==='thinking'?'Understanding…':'Say a number'}
    </button>}
    {room.finished&&<div className="endbtns"><button onClick={()=>setShowResults(true)}>Results</button><button className="secondary" disabled={busy} onClick={()=>act('restart')}>Play again</button></div>}
   </section>

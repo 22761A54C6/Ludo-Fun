@@ -30,10 +30,13 @@ public class VoiceController {
  private static final String PROMPT = """
   You are the voice control of an online Ludo game. Listen to the audio clip.
   The player may speak any language (for example English, Telugu, Hindi, Tamil).
-  Decide if they are asking to roll / throw / play the dice (for example "roll", "roll the dice",
-  "throw", "dice", "go", "my turn", "paasa veyyi", "dice phenko").
-  Reply with "heard": a short transcript of what was said (empty if silence or noise), and
-  "action": "roll" if they asked to roll the dice, otherwise "none".
+  Reply with:
+  - "heard": a short transcript of what was said (empty if silence or noise).
+  - "number": the dice number 1 to 6 the player said, in any language or form
+    (for example "six", "6", "give me a five", "aaru", "moodu", "chhe", "teen"); 0 if they said no number
+    or a number outside 1-6.
+  - "action": "roll" if they said a dice number 1-6 OR asked to roll / throw the dice
+    (for example "roll", "roll the dice", "throw", "paasa veyyi", "dice phenko"); otherwise "none".
   """;
 
  private final RoomController rooms;
@@ -70,6 +73,7 @@ public class VoiceController {
   int seat;
   synchronized (r) { seat = rooms.seat(r, req.playerId()); }
   if (seat < 0) return err(403, "You are not in this room");
+  if (seat != 0) return err(403, "Voice dice is only for the host");
   if (!r.started || r.finished || r.turn != seat || r.rolled) return err(409, "It's not your turn to roll");
   long now = System.currentTimeMillis();
   Long prev = lastCall.put(req.playerId(), now);
@@ -81,10 +85,13 @@ public class VoiceController {
 
   String heard = intent.path("heard").asText("");
   String action = intent.path("action").asText("none");
-  if (!"roll".equals(action)) return ResponseEntity.ok(Map.of("heard", heard, "action", "none"));
-  ResponseEntity<?> rolled = rooms.roll(code, new RoomController.JoinRequest(req.playerId(), null));
+  int number = intent.path("number").asInt(0);
+  if (number < 1 || number > 6) number = 0;
+  if (number == 0 && !"roll".equals(action)) return ResponseEntity.ok(Map.of("heard", heard, "action", "none"));
+  // a spoken number sets the dice; "roll" without a number rolls at random
+  ResponseEntity<?> rolled = rooms.roll(code, req.playerId(), number);
   if (!rolled.getStatusCode().is2xxSuccessful()) return rolled;
-  return ResponseEntity.ok(Map.of("heard", heard, "action", "roll", "room", rolled.getBody()));
+  return ResponseEntity.ok(Map.of("heard", heard, "action", "roll", "number", number, "room", rolled.getBody()));
  }
 
  /** sends the clip to Gemini and returns its {heard, action} JSON answer */
@@ -99,8 +106,9 @@ public class VoiceController {
     "responseSchema", Map.of("type", "OBJECT",
      "properties", Map.of(
       "heard", Map.of("type", "STRING"),
+      "number", Map.of("type", "INTEGER"),
       "action", Map.of("type", "STRING", "enum", List.of("roll", "none"))),
-     "required", List.of("heard", "action"))));
+     "required", List.of("heard", "number", "action"))));
   HttpRequest httpReq = HttpRequest.newBuilder(URI.create(
     "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent"))
    .timeout(Duration.ofSeconds(15))
