@@ -25,7 +25,7 @@ public class RoomController {
  }
  public static class Room {
   public String code; public List<Player> players=new ArrayList<>();
-  public int[][] tokens=new int[4][4]; public int turn=0,dice=0;
+  public int[][] tokens=new int[4][4]; public int turn=0,dice=0,rolls=0;
   public boolean rolled=false, finished=false; public String winner=null;
   public Room() {}
   Room(String code){this.code=code;for(int[] row:tokens)Arrays.fill(row,-1);}
@@ -62,7 +62,7 @@ public class RoomController {
   Room r=find(code);if(r==null)return ResponseEntity.notFound().build();
   synchronized(r){
    int seat=seat(r,req.playerId()); if(seat<0||seat!=r.turn||r.rolled||r.finished)return ResponseEntity.badRequest().body(Map.of("error","Not your turn"));
-   r.dice=1+(int)(Math.random()*6);r.rolled=true;
+   r.dice=1+(int)(Math.random()*6);r.rolled=true;r.rolls++;
    boolean any=false;for(int t=0;t<4;t++)if(legal(r,seat,t)){any=true;break;}
    if(!any){r.rolled=false;r.turn=(r.turn+1)%r.players.size();}
    publish(r);return ResponseEntity.ok(r);
